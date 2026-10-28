@@ -87,6 +87,54 @@
   (~2 950 примитивов на сторону, 11 814 на листе).
 - DXF проходит встроенный аудит `ezdxf` без ошибок; `$INSUNITS = 4` (мм).
 
+## Плагин CorelDRAW 26: `FasadPanel.gms`
+
+Тот же генератор перенесён в VBA-макрос для CorelDRAW 26 — параметрический
+фасад собирается прямо в документе CorelDRAW векторными фигурами на 8 слоях.
+Готовый файл: `output/FasadPanel.gms` (имя ≤40 символов, латиница).
+
+### Установка
+
+Скопировать `FasadPanel.gms` в `%AppData%\Corel\CorelDRAW Graphics Suite 26\Draw\GMS`
+(подхватывается автоматически; в Tools → Macros появляется проект `FasadPanel`,
+точка входа — `FasadPanel` в модуле `modMain`).
+
+### Интерфейс и параметры
+
+- диалог собирается рантаймом через VBIDE (`modFormRuntime`); если VBIDE
+  недоступен — автоматический fallback на цепочку InputBox;
+- этажность (отдельно цокольные), число секций и подъездов;
+- 4 стандартных формы окон + случайный выбор стилей, балконный блок;
+- фактура отделки: кирпич (ложковая перевязка), доски, облицовочные панели,
+  с настраиваемыми размерами A/B и зазором;
+- пропорции фундамента, цоколя, крыши (плоская/двускатная/односкатная/нет),
+  подъездов; панель 165×320 мм, зазоры и seed воспроизводимости.
+
+### Состав VBA-проекта (`gms-source/`)
+
+| Модуль | Назначение |
+|---|---|
+| `ThisMacroStorage.bas` | документ-модуль хранилища GMS |
+| `modUtils.bas` | 8 слоёв, LCG-ГПСЧ, obstacle-клиппинг текстур, «живые» wobble-примитивы |
+| `modEngine.bas` | движок фасада: зоны, 5 типов секций, окна/балконы/лоджии, 3 фактуры, крыши, инженерия |
+| `modMain.bas` | точка входа `FasadPanel`, пресет по умолчанию, валидация, InputBox-мастер |
+| `modFormRuntime.bas` | рантайм-построение UserForm через VBIDE, пресет-кнопка, спин этажей |
+
+### Сборка и проверка `.gms`
+
+Формат Corel GMS = 18-байтный заголовок `GMS\x01…` + OLE/CFBF с потоками
+MS-OVBA (структура выверена по реальному Corel `.gms` и спецификации):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install oletools olefile ezdxf matplotlib
+(cd tools && npm install cfb@1.2.2)
+.venv/bin/python tools/lint_vba.py        # статический контроль VBA
+.venv/bin/python tools/build_gms.py       # cp1251, CRLF, MS-OVBA-сжатие -> build_streams/
+node tools/cfb_wrap.js                    # OLE + GMS-заголовок -> output/FasadPanel.gms
+.venv/bin/python tools/validate_gms.py    # round-trip 5 модулей и разбор oletools без warning'ов
+```
+
 ## Перегенерация
 
 ```bash
