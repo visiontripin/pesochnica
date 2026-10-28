@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Превью v2:
-  1) layout_colors.png  — 4 стороны, 8 цветов по классам объектов;
-  2) simulation_side.png — сторона 1, имитация луча 0.2 мм на ЛМДФ (1:1);
-  3) simulation_zoom.png — увеличенный фрагмент с кладкой и окном.
-Читает итоговые DXF из output/.
+Превью v3 (портрет 165x320):
+  1) layout_colors.png   — лист 2x2, 8 цветов по классам объектов;
+  2) simulation_side.png — сторона 1, имитация луча 0.2 мм на ЛМДФ;
+  3) simulation_zoom.png — увеличенный фрагмент (окна, кладка, плитка).
 """
 import math
 import os
@@ -29,7 +28,7 @@ RGB = {
     "07_TSEKOL": (230 / 255, 138 / 255, 0 / 255),
     "08_KRYSHA": (68 / 255, 68 / 255, 68 / 255),
 }
-ENGRAVE = {k: "#2b2118" for k in RGB}      # на ЛМДФ все классы гравируются одинаково
+ENGRAVE = {k: "#2b2118" for k in RGB}
 
 
 def load(path):
@@ -66,7 +65,7 @@ def render(by, colors, path, xlim, ylim, fig_w_mm, bg="white", beam=True):
     ax = fig.add_axes([0, 0, 1, 1])
     fig.patch.set_facecolor(bg)
     ax.set_facecolor(bg)
-    lw_pt = (BEAM_MM / span_x * fig_w_in * 72.0) if beam else 0.9
+    lw_pt = (BEAM_MM / span_x * fig_w_in * 72.0) if beam else 0.8
     for layer, segs in by.items():
         if segs:
             ax.add_collection(LineCollection(
@@ -81,14 +80,15 @@ def render(by, colors, path, xlim, ylim, fig_w_mm, bg="white", beam=True):
     print("saved", path)
 
 
-# цветной слой-превью всего листа 2x2
-by_sheet = load(os.path.join(OUT, "facade_4sides_320x165.dxf"))
-render(by_sheet, RGB, "layout_colors.png", (0, 655), (0, 345), 330.0,
+# лист 2x2: 345 x 655 мм
+by_sheet = load(os.path.join(OUT, "facade_4sides_165x320.dxf"))
+render(by_sheet, RGB, "layout_colors.png", (0, 345), (0, 655), 260.0,
        bg="white", beam=False)
 
-# симуляция гравировки на стороне 1
-by_side = load(os.path.join(OUT, "facade_side1_320x165.dxf"))
-render(by_side, ENGRAVE, "simulation_side.png", (0, 320), (0, 165), 280.0,
+# сторона 1: 165 x 320
+by_side = load(os.path.join(OUT, "facade_side1_165x320.dxf"))
+render(by_side, ENGRAVE, "simulation_side.png", (0, 165), (0, 320), 130.0,
        bg=WOOD, beam=True)
-render(by_side, ENGRAVE, "simulation_zoom.png", (0, 118), (55, 118), 240.0,
+# зум: две секции, два этажа
+render(by_side, ENGRAVE, "simulation_zoom.png", (28, 102), (75, 150), 180.0,
        bg=WOOD, beam=True)
