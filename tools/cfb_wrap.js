@@ -20,13 +20,19 @@ const GMS_HEADER = Buffer.from([
 
 const cfb = CFB.utils.cfb_new(); // корень "Root Entry" + служебный seed-поток
 
-// Потоки уровня корня
+// Служебные host-потоки Corel из рабочего GMS пользователя.
+for (const entry of manifest.host_entries) {
+  CFB.utils.cfb_add(cfb, "/" + entry.path, readStream(entry.file));
+}
+const base = "/apc/The VBA Project/_VBA_Project/";
+
+// Потоки проекта
 for (const name of manifest.root_entries) {
-  CFB.utils.cfb_add(cfb, '/' + name, readStream(name));
+  CFB.utils.cfb_add(cfb, base + name, readStream(name));
 }
 // Потоки внутри storage VBA (промежуточный storage создаётся автоматически)
 for (const name of manifest.vba_entries) {
-  CFB.utils.cfb_add(cfb, '/VBA/' + name, readStream(name));
+  CFB.utils.cfb_add(cfb, base + 'VBA/' + name, readStream(name));
 }
 // seed-заглушка cfb-библиотеки пересоздаётся при каждом cfb_add/init_cfb;
 // помечаем её типом 0 (unknown) - rebuild_cfb при сериализации её отбрасывает

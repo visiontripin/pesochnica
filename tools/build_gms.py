@@ -9,6 +9,10 @@
 import json
 import os
 import sys
+import io
+import struct
+
+import olefile
 
 sys.path.insert(0, os.path.dirname(__file__))
 from ovba import (build_dir, build_project_ini, build_projectwm,
@@ -19,6 +23,8 @@ SRC = os.path.join(ROOT, "gms-source")
 BUILD = os.path.join(ROOT, "build_streams")
 OUT_GMS = os.path.join(ROOT, "output", "FasadPanel.gms")
 
+TEMPLATE = os.path.join(ROOT, "ShipoYaschik_V2_01.gms")
+HOST_PREFIX = "apc/The VBA Project/"
 PROJECT_NAME = "FasadPanel"
 # (файл, имя модуля/потока, тип: 1 документ, 0 модуль)
 MODULES = [
@@ -54,6 +60,44 @@ def main():
     dump("dir", build_dir(PROJECT_NAME, mod_records))
     dump("_VBA_PROJECT", build_vba_project_stream())
 
+    # Служебная обёртка Corel из рабочего проекта пользователя. VBA-код,
+    # форма и кэш шипоящика НЕ копируются. Путь владельца удаляется.
+    with open(TEMPLATE, "rb") as fh:
+        template = fh.read()
+    if template[:4] != b"GMS\x01":
+        raise ValueError("Ожидался шаблон Corel GMS: " + TEMPLATE)
+    offset = struct.unpack_from("<I", template, 4)[0] + 8
+    with olefile.OleFileIO(io.BytesIO(template[offset:])) as ole:
+        host_entries = []
+        for parts in ole.listdir(streams=True, storages=False):
+            path = "/".join(parts)
+            if not path.startswith(HOST_PREFIX) or path.startswith(HOST_PREFIX + "_VBA_Project/"):
+                continue
+            data = ole.openstream(parts).read()
+            if path == HOST_PREFIX + "VBA Project Data":
+                # Записи формата host: id (uint16), размер (uint32), payload.
+                records = []
+                seen = set()
+                pos = 0
+                while pos < len(data):
+                    rid, length = struct.unpack_from("<HI", data, pos)
+                    value = data[pos + 6:pos + 6 + length]
+                    if len(value) != length:
+                        raise ValueError("Повреждён VBA Project Data")
+                    seen.add(rid)
+                    if rid == 0x01b8:  # длина следующего пути в символах
+                        value = struct.pack("<I", len("FasadPanel.gms"))
+                    elif rid == 0x01c2:  # путь проекта, без личных данных
+                        value = "FasadPanel.gms".encode("utf-16le")
+                    records.append(struct.pack("<HI", rid, len(value)) + value)
+                    pos += 6 + length
+                if not {0x01b8, 0x01c2}.issubset(seen):
+                    raise ValueError("В шаблоне не найдены поля пути проекта")
+                data = b"".join(records)
+            fname = "host_%02d.bin" % len(host_entries)
+            dump(fname, data)
+            host_entries.append({"path": path, "file": fname})
+
     manifest = {
         "project": PROJECT_NAME,
         "out": OUT_GMS,
@@ -61,6 +105,7 @@ def main():
         "root_entries": ["PROJECT", "PROJECTwm"],
         "vba_entries": ["_VBA_PROJECT", "dir"] + [m[0] for m in mod_records],
         "entries": entries,
+        "host_entries": host_entries,
     }
     with open(os.path.join(BUILD, "manifest.json"), "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=2)

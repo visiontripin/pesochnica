@@ -54,7 +54,8 @@ Private Function FindProject() As Object
             Exit Function
         End If
     Next prj
-    Set FindProject = Application.VBE.ActiveVBProject
+    ' Не изменять произвольный активный проект: при отсутствии FasadPanel
+    ' вызывающая процедура предложит мастер InputBox.
 End Function
 
 Private Sub BuildControls(d As Object)

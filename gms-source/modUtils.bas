@@ -47,14 +47,22 @@ Public Sub InitLayersData()
 End Sub
 
 Public Sub SeedRNG(seed As Long)
+    Dim v As Double
     mSeed = seed
-    mRndState = seed
+    v = Abs(CDbl(seed))
+    v = v - Int(v / 2147483646#) * 2147483646#
+    mRndState = CLng(v) + 1
 End Sub
 
-' детерминированный псевдослучайный: LCG (в Double, чтобы не было overflow Long)
+' Park-Miller / Schrage: без переполнения VBA Long при каждом шаге.
 Public Function RndD() As Double
-    mRndState = CLng((CDbl(mRndState) * 1103515245# + 12345#) Mod 2147483648#)
-    RndD = CDbl(mRndState) / 2147483648#
+    Dim hi As Long, lo As Long, test As Long
+    hi = mRndState \ 127773
+    lo = mRndState Mod 127773
+    test = 16807 * lo - 2836 * hi
+    If test <= 0 Then test = test + 2147483647
+    mRndState = test
+    RndD = CDbl(mRndState) / 2147483647#
 End Function
 
 Public Function RndRange(lo As Double, hi As Double) As Double
@@ -130,7 +138,7 @@ Private Function SubtractIntervals(lo As Double, hi As Double, blocks() As Doubl
                 ' сохранить левый кусок
                 If cnt + 1 >= UBound(res) Then ReDim Preserve res(0 To UBound(res) + 32)
                 res(cnt) = curLo: res(cnt + 1) = a: cnt = cnt + 2
-                curLo = Application.Max(curLo, b)
+                curLo = MaxD(curLo, b)
                 If curLo >= curHi Then Exit For
             End If
         End If
