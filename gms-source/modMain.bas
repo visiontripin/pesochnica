@@ -48,7 +48,7 @@ Public Sub FasadPanel()
     On Error GoTo 0
 
     If Not okForm Then
-        If MsgBox("Не удалось создать диалоговое окно (имя проекта или доступ к VBA)." & vbCrLf & _
+        If MsgBox("Не удалось открыть форму frmFasad." & vbCrLf & _
                   "Запустить пошаговый мастер на InputBox?", vbYesNo + vbQuestion, _
                   "Генератор фасада") = vbNo Then Exit Sub
         WizardInputBoxes

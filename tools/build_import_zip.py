@@ -15,6 +15,8 @@ def main():
             source = (ROOT / "gms-source" / (name + ".bas")).read_text(encoding="utf-8")
             data = source.replace("\r\n", "\n").replace("\n", "\r\n").encode("cp1251")
             z.writestr(name + ".bas", data)
+        form = (ROOT / "gms-source" / "frmFasad-code.txt").read_text(encoding="utf-8")
+        z.writestr("frmFasad-code.txt", form.replace("\n", "\r\n").encode("utf-8-sig"))
     with ZipFile(OUT) as z:
         assert z.testzip() is None
         for name in NAMES:

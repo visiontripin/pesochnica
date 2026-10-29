@@ -1,0 +1,76 @@
+Option Explicit
+
+' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
+Private Sub UserForm_Initialize()
+    Me.Caption = "Генератор фасада панельного дома"
+    Me.Width = 472
+    Me.Height = 500
+    BuildControls Me
+
+    With Me.Controls("cmbRoof")
+        .AddItem "0 - Плоская"
+        .AddItem "1 - Двускатная"
+        .AddItem "2 - Односкатная"
+        .AddItem "3 - Без крыши"
+        .ListIndex = RoofType
+    End With
+    With Me.Controls("cmbWindow")
+        .AddItem "0 - Одностворчатое"
+        .AddItem "1 - Двустворчатое"
+        .AddItem "2 - Трёхстворчатое"
+        .AddItem "3 - С форточкой"
+        .AddItem "4 - Балконный блок"
+        .ListIndex = WindowType
+    End With
+    With Me.Controls("cmbTexture")
+        .AddItem "0 - Кирпич"
+        .AddItem "1 - Доски"
+        .AddItem "2 - Облицовочные панели"
+        .ListIndex = TextureType
+    End With
+    Me.Controls("chkFoundation").Value = FoundationOn
+    Me.Controls("chkRandom").Value = RandomStyles
+    Me.Controls("chkJitter").Value = JitterOn
+    Me.Controls("chkDetails").Value = DetailsOn
+    Me.Controls("chkCanopy").Value = CanopyOn
+End Sub
+
+Private Sub btnOk_Click()
+    PanelW = Num(Me.Controls("txtW").Text, PanelW)
+    PanelH = Num(Me.Controls("txtH").Text, PanelH)
+    MarginMm = Num(Me.Controls("txtMargin").Text, MarginMm)
+    GapMin = Num(Me.Controls("txtGap").Text, GapMin)
+    NFloors = NumL(Me.Controls("txtFloors").Text, NFloors)
+    NPlinth = NumL(Me.Controls("txtPlinth").Text, NPlinth)
+    NSections = NumL(Me.Controls("txtSections").Text, NSections)
+    NEntrances = NumL(Me.Controls("txtEntrances").Text, NEntrances)
+    FoundationOn = CBool(Me.Controls("chkFoundation").Value)
+    FoundationH = Num(Me.Controls("txtFoundH").Text, FoundationH)
+    RoofType = Me.Controls("cmbRoof").ListIndex
+    WindowType = Me.Controls("cmbWindow").ListIndex
+    TextureType = Me.Controls("cmbTexture").ListIndex
+    RandomStyles = CBool(Me.Controls("chkRandom").Value)
+    TexA = Num(Me.Controls("txtTexA").Text, TexA)
+    TexB = Num(Me.Controls("txtTexB").Text, TexB)
+    TexGap = Num(Me.Controls("txtTexGap").Text, TexGap)
+    JitterOn = CBool(Me.Controls("chkJitter").Value)
+    DetailsOn = CBool(Me.Controls("chkDetails").Value)
+    CanopyOn = CBool(Me.Controls("chkCanopy").Value)
+    Seed = NumL(Me.Controls("txtSeed").Text, Seed)
+    If Not ValidateSettings Then Exit Sub
+    FormCancelled = False
+    Me.Hide
+End Sub
+
+Private Sub btnCancel_Click()
+    FormCancelled = True
+    Me.Hide
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then
+        Cancel = True
+        FormCancelled = True
+        Me.Hide
+    End If
+End Sub
