@@ -10,52 +10,83 @@ Option Explicit
 ' ============================================================
 
 Private Const FORM_NAME As String = "frmFasadDyn"
-Private Const PROJECT_NAME As String = "FasadPanel"
+' Имя проекта в редакторе VBA пользователя; измените при переименовании проекта.
+Private Const PROJECT_NAME As String = "FasadPanel100"
 
 Public Function ShowFacadeForm() As Boolean
-    Dim prj As Object
-    Dim comp As Object
+    Dim prj As Object, comp As Object, existing As Object, frm As Object
+    Dim stage As String, problem As String
+    Dim created As Boolean, shown As Boolean
     On Error GoTo fail
 
+    stage = "поиск проекта " & PROJECT_NAME
     Set prj = FindProject()
-    If prj Is Nothing Then GoTo fail
+    If prj Is Nothing Then
+        Err.Raise vbObjectError + 101, "FasadPanel", _
+            "Проект не найден. Проверьте PROJECT_NAME в modFormRuntime."
+    End If
 
-    ' удалить прежнюю временную форму, если осталась
+    ' Не удаляем автоматически одноимённую форму: это может быть чужой объект.
+    stage = "проверка существующей формы"
     On Error Resume Next
-    prj.VBComponents.Remove prj.VBComponents(FORM_NAME)
+    Set existing = prj.VBComponents(FORM_NAME)
+    Err.Clear
     On Error GoTo fail
+    If Not existing Is Nothing Then
+        Err.Raise vbObjectError + 102, "FasadPanel", _
+            "В проекте уже есть " & FORM_NAME & ". Проверьте её в редакторе VBA; " & _
+            "если это оставшаяся временная форма фасада, удалите её вручную."
+    End If
 
+    stage = "создание временной формы"
     Set comp = prj.VBComponents.Add(3)   ' vbext_ct_MSForm
+    created = True
     comp.Name = FORM_NAME
     comp.Properties("Caption").Value = "Генератор фасада панельного дома"
     comp.Properties("Width").Value = 472
     comp.Properties("Height").Value = 586
 
+    stage = "создание элементов управления"
     BuildControls comp.Designer
+    stage = "запись кода формы"
     comp.CodeModule.AddFromString FormCodeText()
 
-    Dim frm As Object
+    stage = "открытие формы"
     Set frm = VBA.UserForms.Add(comp.Name)
     frm.Show
-
+    shown = True
+    stage = "закрытие и удаление временной формы"
+    Unload frm
+    Set frm = Nothing
     prj.VBComponents.Remove comp
+    created = False
     ShowFacadeForm = True
     Exit Function
 fail:
-    ShowFacadeForm = False
+    problem = "Этап: " & stage & vbCrLf & "Ошибка " & Err.Number & ": " & Err.Description
+    On Error Resume Next
+    If Not frm Is Nothing Then Unload frm
+    Set frm = Nothing
+    If created Then prj.VBComponents.Remove comp
+    On Error GoTo 0
+    If shown Then
+        MsgBox problem & vbCrLf & "Проверьте, не осталась ли временная форма " & FORM_NAME & _
+               " в проекте.", vbExclamation, "Диалог фасада"
+        ShowFacadeForm = True
+    Else
+        MsgBox problem, vbExclamation, "Диалог фасада: диагностика"
+        ShowFacadeForm = False
+    End If
 End Function
 
 Private Function FindProject() As Object
     Dim prj As Object
-    On Error Resume Next
     For Each prj In Application.VBE.VBProjects
-        If prj.Name = PROJECT_NAME Then
+        If StrComp(prj.Name, PROJECT_NAME, vbTextCompare) = 0 Then
             Set FindProject = prj
             Exit Function
         End If
     Next prj
-    ' Не изменять произвольный активный проект: при отсутствии FasadPanel
-    ' вызывающая процедура предложит мастер InputBox.
 End Function
 
 Private Sub BuildControls(d As Object)
