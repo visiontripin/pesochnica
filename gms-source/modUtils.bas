@@ -122,7 +122,20 @@ Private Function SubtractIntervals(lo As Double, hi As Double, blocks() As Doubl
     Dim cnt As Long: cnt = 0
     Dim curLo As Double, curHi As Double
     curLo = lo: curHi = hi
-    Dim i As Long, a As Double, b As Double
+    ' Препятствия могут поступать в произвольном порядке: сортируем по началу.
+    Dim i As Long, j As Long, a As Double, b As Double
+    Dim tmpLo As Double, tmpHi As Double
+    For i = 1 To n - 1
+        tmpLo = blocks(i, 0): tmpHi = blocks(i, 1)
+        j = i - 1
+        Do While j >= 0
+            If blocks(j, 0) <= tmpLo Then Exit Do
+            blocks(j + 1, 0) = blocks(j, 0)
+            blocks(j + 1, 1) = blocks(j, 1)
+            j = j - 1
+        Loop
+        blocks(j + 1, 0) = tmpLo: blocks(j + 1, 1) = tmpHi
+    Next i
     For i = 0 To n - 1
         a = blocks(i, 0): b = blocks(i, 1)
         If b > curLo And a < curHi Then
@@ -172,14 +185,13 @@ Public Sub DrawHClip(y As Double, xa As Double, xb As Double, layerIdx As Long, 
             n = n + 1
         End If
     Next i
-    ReDim Preserve blocks(0 To n * 2 - 1, 0 To 1)
     Dim parts As Variant
     parts = SubtractIntervals(xa, xb, blocks, n)
     If IsEmpty(parts) Then Exit Sub
     Dim k As Long
     For k = LBound(parts) To UBound(parts) Step 2
         If parts(k + 1) - parts(k) >= 0.7 Then
-            DrawWobbleLine parts(k), y, parts(k + 1), y, layerIdx, amp, jitterOn
+            DrawWobbleLine CDbl(parts(k)), y, CDbl(parts(k + 1)), y, layerIdx, amp, jitterOn
         End If
     Next k
 End Sub
@@ -201,14 +213,13 @@ Public Sub DrawVClip(x As Double, ya As Double, yb As Double, layerIdx As Long, 
             n = n + 1
         End If
     Next i
-    ReDim Preserve blocks(0 To n * 2 - 1, 0 To 1)
     Dim parts As Variant
     parts = SubtractIntervals(ya, yb, blocks, n)
     If IsEmpty(parts) Then Exit Sub
     Dim k As Long
     For k = LBound(parts) To UBound(parts) Step 2
         If parts(k + 1) - parts(k) >= 0.7 Then
-            DrawWobbleLine x, parts(k), x, parts(k + 1), layerIdx, amp, jitterOn
+            DrawWobbleLine x, CDbl(parts(k)), x, CDbl(parts(k + 1)), layerIdx, amp, jitterOn
         End If
     Next k
 End Sub

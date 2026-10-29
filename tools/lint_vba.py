@@ -61,7 +61,7 @@ for fn in sorted(os.listdir(SRC)):
         (r"(?<!End )(?<!Exit )\bSub\b", r"\bEnd Sub\b", "Sub"),
         (r"(?<!End )(?<!Exit )\bFunction\b", r"\bEnd Function\b", "Function"),
         (r"\bFor (Each )?", r"(?<!Resume )\bNext\b", "For"),
-        (r"^\s*Do\b|\bDo\b", r"\bLoop\b", "Do"),
+        (r"^\s*Do\b", r"^\s*Loop\b", "Do"),
         (r"\bSelect Case\b", r"\bEnd Select\b", "Select"),
         (r"(?<!End )\bWith\b", r"\bEnd With\b", "With"),
     ]
