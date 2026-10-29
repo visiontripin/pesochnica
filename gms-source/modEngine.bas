@@ -20,45 +20,106 @@ Private mACmap() As String       ' ключ "sec|floor" -> позиция L/R
 Private mShapeCount As Long
 
 Public Sub BuildFacade()
-    ' BuildFacade не является точкой входа: настройки задаёт FasadPanel.
+    ' Точка входа пользователя — FasadPanel, а не BuildFacade.
     If PanelW < 40 Or PanelH < 60 Or NFloors < 1 Or NPlinth < 0 Or NSections < 1 Then
         MsgBox "Запустите макрос FasadPanel, чтобы задать параметры фасада.", vbExclamation
         Exit Sub
     End If
+    If Application.Documents.Count = 0 Then
+        MsgBox "Сначала откройте документ CorelDRAW и выберите нужную страницу.", vbExclamation
+        Exit Sub
+    End If
+    If MsgBox("Фасад будет добавлен на активную страницу от точки 0;0. " & _
+              "Существующие объекты не удаляются и могут перекрываться." & vbCrLf & _
+              "Продолжить?", vbYesNo + vbQuestion, "Генератор фасада") <> vbYes Then Exit Sub
+
     Dim doc As Document
-    Set doc = Application.CreateDocument
+    Dim oldUnit As Long, oldOptimization As Boolean
+    Dim haveSettings As Boolean, groupStarted As Boolean, progressStarted As Boolean
+    Dim errNumber As Long, errText As String
+    Dim stage As String
+    Set doc = Application.ActiveDocument
+    On Error GoTo fail
+    oldUnit = doc.Unit
+    oldOptimization = Application.Optimization
+    haveSettings = True
+    doc.BeginCommandGroup "Генератор фасада"
+    groupStarted = True
     doc.Unit = cdrMillimeter
-    doc.ActivePage.SetSize PanelW, PanelH
-    doc.ClearSelection
+    Application.Optimization = True
+    On Error Resume Next
+    Application.Status.BeginProgress "Генератор фасада: подготовка", False
+    If Err.Number = 0 Then progressStarted = True
+    Err.Clear
+    On Error GoTo fail
+
+    stage = "подготовка слоёв"
+    FacadeProgress stage, 2
     PrepareLayers doc
     ResetObstacles
     SeedRNG Seed
     mShapeCount = 0
     mJoint = 2#
 
-    ' защита от слишком мелких шагов фактуры под лазерный луч
     If TexA < GapMin + 0.2 Then TexA = GapMin + 0.2
     If TexB < GapMin + 0.2 Then TexB = GapMin + 0.2
 
+    stage = "расчёт здания"
+    FacadeProgress stage, 5
     ComputeZones
     ComputeSections
     RegisterDownpipeObstacles
     RegisterAllOpenings
+    stage = "каркас и проёмы"
+    FacadeProgress stage, 10
     DrawFrameAndJoints
     DrawFoundation
     DrawFloors
+    stage = "фактура"
+    FacadeProgress stage, 25
     DrawTextures
+    stage = "детали и крыша"
+    FacadeProgress stage, 90
     If DetailsOn Then
         DrawDownpipes
-        ' Кондиционеры уже рисуются в DrawFloors по карте mACmap.
         DrawCracks
     End If
     DrawRoof
+    FacadeProgress "завершение", 100
+    GoTo cleanup
 
-    doc.ClearSelection
-    MsgBox "Фасад готов: " & mShapeCount & " объектов, " & NSectionsAll & " секций, " & _
-           (NFloors + NPlinth) & " этажей." & vbCrLf & _
-           "Слои 01..08 соответствуют классам объектов.", vbInformation, "Генератор фасада"
+fail:
+    errNumber = Err.Number
+    errText = Err.Description
+    Resume cleanup
+cleanup:
+    On Error Resume Next
+    If progressStarted Then Application.Status.EndProgress
+    If haveSettings Then
+        doc.Unit = oldUnit
+        Application.Optimization = oldOptimization
+    End If
+    If groupStarted Then doc.EndCommandGroup
+    Application.ActiveWindow.Refresh
+    Application.Refresh
+    On Error GoTo 0
+    If errNumber <> 0 Then
+        MsgBox "Ошибка " & errNumber & " на этапе «" & stage & "»: " & errText & vbCrLf & _
+               "Часть рисунка могла остаться в документе; её можно отменить одной командой Ctrl+Z.", _
+               vbExclamation, "Генератор фасада"
+    Else
+        MsgBox "Фасад построен: " & NSectionsAll & " секций, " & _
+               (NFloors + NPlinth) & " этажей." & vbCrLf & _
+               "Проверьте результат перед гравировкой.", vbInformation, "Генератор фасада"
+    End If
+End Sub
+
+Private Sub FacadeProgress(message As String, percent As Long)
+    On Error Resume Next
+    Application.Status.SetProgressMessage "Генератор фасада: " & message
+    Application.Status.Progress = percent
+    On Error GoTo 0
+    DoEvents
 End Sub
 
 Private Function NSectionsAll() As Long
@@ -539,6 +600,7 @@ End Sub
 Private Sub DrawTextures()
     Dim f As Long, si As Long
     For f = 0 To mNF - 1
+        FacadeProgress "фактура, этаж " & CStr(f + 1) & " из " & CStr(mNF), 25 + CLng(60# * f / mNF)
         For si = 1 To mNSec
             If mSecType(si) <> 4 Then DrawTextureSection si, f
         Next si

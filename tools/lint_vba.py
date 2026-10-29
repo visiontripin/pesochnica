@@ -44,7 +44,7 @@ for fn in modules:
     procedures.update(name.lower() for name in re.findall(
         r'^\s*(?:(?:Private|Public|Friend)\s+)?(?:Sub|Function)\s+(\w+)',
         text, re.I | re.M))
-standalone_keywords = {'else', 'loop', 'wend', 'next', 'do', 'stop', 'return'}
+standalone_keywords = {'else', 'loop', 'wend', 'next', 'do', 'stop', 'return', 'doevents'}
 
 for fn in sorted(os.listdir(SRC)):
     if not fn.endswith(".bas"):
