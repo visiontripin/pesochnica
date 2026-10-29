@@ -78,7 +78,7 @@ Public Function MaxD(a As Double, b As Double) As Double
 End Function
 
 ' разбор числа с запятой/точкой (как ЗаменаТчкНаЗапт в шипоящике)
-Public Function Num(txt As String, defaultValue As Double) As Double
+Public Function Num(ByVal txt As String, ByVal defaultValue As Double) As Double
     Dim s As String
     s = Trim$(txt)
     s = Replace(s, ".", ",")
@@ -89,9 +89,9 @@ Public Function Num(txt As String, defaultValue As Double) As Double
     End If
 End Function
 
-Public Function NumL(txt As String, defaultValue As Long) As Long
+Public Function NumL(ByVal txt As String, ByVal defaultValue As Long) As Long
     Dim v As Double
-    v = Num(txt, defaultValue)
+    v = Num(txt, CDbl(defaultValue))
     NumL = CLng(v)
 End Function
 
