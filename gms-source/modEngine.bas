@@ -756,7 +756,7 @@ Private Sub DrawRoof()
         ' вентшахты
         Dim vx As Variant
         For Each vx In Array(mX0 + (mX1 - mX0) * 0.2, mX0 + (mX1 - mX0) * 0.62)
-            DrawRectWobble vx, mRoofBot + mRoofH * 0.68, mRoofH * 0.4, mRoofH * 0.17, LC_KRYSHA, 0.07, JitterOn
+            DrawRectWobble CDbl(vx), mRoofBot + mRoofH * 0.68, mRoofH * 0.4, mRoofH * 0.17, LC_KRYSHA, 0.07, JitterOn
             DrawWobbleLine vx - 0.7, mRoofBot + mRoofH * 0.9, vx + mRoofH * 0.4 + 0.7, mRoofBot + mRoofH * 0.9, LC_KRYSHA, 0.05, JitterOn
             mShapeCount = mShapeCount + 2
         Next vx
