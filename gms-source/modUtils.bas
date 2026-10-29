@@ -115,6 +115,12 @@ Public Sub AddObstacle(x1 As Double, y1 As Double, x2 As Double, y2 As Double)
     mObsCount = mObsCount + 1
 End Sub
 
+' Прямоугольник по левому нижнему углу и размерам (в мм).
+Public Sub AddObstacleRect(x As Double, y As Double, w As Double, h As Double)
+    If w <= 0 Or h <= 0 Then Exit Sub
+    AddObstacle x, y, x + w, y + h
+End Sub
+
 ' вычитание интервалов-препятствий из отрезка [lo,hi] по одной оси
 Private Function SubtractIntervals(lo As Double, hi As Double, blocks() As Double, n As Long) As Variant
     Dim res() As Double
@@ -141,9 +147,9 @@ Private Function SubtractIntervals(lo As Double, hi As Double, blocks() As Doubl
         If b > curLo And a < curHi Then
             If a <= curLo Then
                 If b >= curHi Then
-                    ' полностью перекрыт
-                    SubtractIntervals = Empty
-                    Exit Function
+                    ' Остаток перекрыт, но ранее найденные интервалы сохраняем.
+                    curLo = curHi
+                    Exit For
                 Else
                     curLo = b
                 End If

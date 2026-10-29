@@ -20,6 +20,11 @@ Private mACmap() As String       ' ключ "sec|floor" -> позиция L/R
 Private mShapeCount As Long
 
 Public Sub BuildFacade()
+    ' BuildFacade не является точкой входа: настройки задаёт FasadPanel.
+    If PanelW < 40 Or PanelH < 60 Or NFloors < 1 Or NPlinth < 0 Or NSections < 1 Then
+        MsgBox "Запустите макрос FasadPanel, чтобы задать параметры фасада.", vbExclamation
+        Exit Sub
+    End If
     Dim doc As Document
     Set doc = Application.CreateDocument
     doc.Unit = cdrMillimeter
@@ -212,7 +217,7 @@ Private Sub RegisterDownpipeObstacles()
 End Sub
 
 Private Sub RegisterAllOpenings()
-    ReDim mACmap(0 To 1023)
+    ReDim mACmap(0 To (mNSec + 1) * mNF - 1)
     Dim i As Long, f As Long
     For i = 1 To mNSec
         For f = 0 To mNF - 1
@@ -239,7 +244,7 @@ Private Sub RegisterAllOpenings()
             If key > 0 Then
                 cands(pick) = 0
                 si = key \ 1000: fl = key Mod 1000
-                mACmap(si * 32 + fl) = IIf(RndD() < 0.5, "L", "R")
+                mACmap(si * mNF + fl) = IIf(RndD() < 0.5, "L", "R")
                 RegisterACObstacle si, fl
                 got = got + 1
             End If
@@ -257,18 +262,18 @@ Private Sub RegisterSectionOpening(si As Long, f As Long)
 
     Select Case mSecType(si)
         Case 0 ' одинарные окна
-            AddObstacle cx - sw / 2 - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
+            AddObstacleRect cx - sw / 2 - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
         Case 2 ' парные окна
             Dim gapW As Double: gapW = (x1 - x0) * 0.06
-            AddObstacle x0 + (x1 - x0) * 0.08 - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
-            AddObstacle x1 - (x1 - x0) * 0.08 - sw - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
+            AddObstacleRect x0 + (x1 - x0) * 0.08 - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
+            AddObstacleRect x1 - (x1 - x0) * 0.08 - sw - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
         Case 1 ' балкон
-            AddObstacle cx - (x1 - x0) * 0.42, yb + mFloorH * 0.16, (x1 - x0) * 0.84, mFloorH * 0.7
-            AddObstacle cx - (x1 - x0) * 0.47, yb + 0.4, (x1 - x0) * 0.94, mFloorH * 0.15
+            AddObstacleRect cx - (x1 - x0) * 0.42, yb + mFloorH * 0.16, (x1 - x0) * 0.84, mFloorH * 0.7
+            AddObstacleRect cx - (x1 - x0) * 0.47, yb + 0.4, (x1 - x0) * 0.94, mFloorH * 0.15
         Case 3 ' сплошное остекление
-            AddObstacle x0 + 1.4, yb + mFloorH * 0.15, (x1 - x0) - 2.8, mFloorH * 0.68
+            AddObstacleRect x0 + 1.4, yb + mFloorH * 0.15, (x1 - x0) - 2.8, mFloorH * 0.68
         Case 4 ' лоджия / подъезд
-            AddObstacle x0 + 0.3, yb + 0.3, (x1 - x0) - 0.6, mFloorH - 0.6
+            AddObstacleRect x0 + 0.3, yb + 0.3, (x1 - x0) - 0.6, mFloorH - 0.6
     End Select
 End Sub
 
@@ -277,12 +282,12 @@ Private Sub RegisterACObstacle(si As Long, fl As Long)
     Dim yb As Double: yb = mFY(fl)
     Dim acx As Double, aw As Double
     aw = MaxD(4.2, (mSecX2(si) - x0) * 0.14)
-    If mACmap(si * 32 + fl) = "L" Then
+    If mACmap(si * mNF + fl) = "L" Then
         acx = x0 + (mSecX2(si) - x0) * 0.24
     Else
         acx = x0 + (mSecX2(si) - x0) * 0.76
     End If
-    AddObstacle acx - aw / 2 - 0.4, yb + 0.9, aw + 0.8, MaxD(3.2, mFloorH * 0.12) + 0.8
+    AddObstacleRect acx - aw / 2 - 0.4, yb + 0.9, aw + 0.8, MaxD(3.2, mFloorH * 0.12) + 0.8
 End Sub
 
 ' ------------------------------------------------------------
@@ -316,7 +321,7 @@ Private Sub DrawSection(si As Long, f As Long)
         Case 2
             DrawWindow x0 + (x1 - x0) * 0.08, wy, sw, wh, st
             DrawWindow x1 - (x1 - x0) * 0.08 - sw, wy, sw, wh, (st + 1) Mod 4
-            If DetailsOn And Len(mACmap(si * 32 + f)) > 0 Then DrawAC si, f
+            If DetailsOn And Len(mACmap(si * mNF + f)) > 0 Then DrawAC si, f
         Case 1
             DrawBalcony cx, yb, x1 - x0
         Case 3
@@ -396,7 +401,7 @@ Private Sub DrawWindow(x As Double, y As Double, w As Double, h As Double, style
     DrawRectWobble x - 1#, y - 1.1, w + 2#, 0.65, LC_PROYOM, 0.06, JitterOn
     DrawWobbleLine x - 0.5, y - 1.95, x + w + 0.5, y - 1.95, LC_PROYOM, 0.05, JitterOn
     mShapeCount = mShapeCount + 2
-    AddObstacle x - 1.4, y - 2.3, w + 2.8, h + 2.7
+    AddObstacleRect x - 1.4, y - 2.3, w + 2.8, h + 2.7
 End Sub
 
 Private Sub DrawSashFrame(ax As Double, bx As Double, iy As Double, ih As Double)
@@ -419,7 +424,7 @@ Private Sub DrawBalconyDoor(x As Double, y As Double, w As Double, h As Double)
     DrawWobbleLine split - 0.8, y + h * 0.42, split - 0.8, y + h * 0.56, LC_PROYOM, 0.03, JitterOn
     DrawRectWobble x - 1#, y - 1.1, w + 2#, 0.65, LC_PROYOM, 0.06, JitterOn
     mShapeCount = mShapeCount + 7
-    AddObstacle x - 1.4, y - 2.3, w + 2.8, h + 2.7
+    AddObstacleRect x - 1.4, y - 2.3, w + 2.8, h + 2.7
 End Sub
 
 ' ------------------------------------------------------------
@@ -648,7 +653,7 @@ Private Sub DrawAC(si As Long, fl As Long)
     Dim aw As Double, ah As Double
     aw = MaxD(4.2, secW * 0.14): ah = MaxD(2.6, mFloorH * 0.1)
     Dim acx As Double
-    If mACmap(si * 32 + fl) = "L" Then acx = x0 + secW * 0.24 Else acx = x0 + secW * 0.76
+    If mACmap(si * mNF + fl) = "L" Then acx = x0 + secW * 0.24 Else acx = x0 + secW * 0.76
     Dim topY As Double: topY = yb + mFloorH * 0.16
     Dim x As Double, y As Double
     x = acx - aw / 2: y = topY - ah
@@ -712,13 +717,8 @@ Private Sub DrawCracks()
             pts(k, 0) = cx: pts(k, 1) = cy
         Next k
         If ok Then
-            Dim trimmed() As Double
-            ReDim trimmed(0 To k, 0 To 1)
-            Dim j As Long
-            For j = 0 To k
-                trimmed(j, 0) = pts(j, 0): trimmed(j, 1) = pts(j, 1)
-            Next j
-            DrawPoly trimmed, LC_KLADKA, False
+            ' После For k = 1 To 4 значение k равно 5, а pts заканчивается на 4.
+            DrawPoly pts, LC_KLADKA, False
             made = made + 1
             mShapeCount = mShapeCount + 1
         End If
@@ -742,7 +742,7 @@ Private Sub DrawRoof()
                 tx = cx - tw / 2: ty = mRoofBot + mRoofH * 0.18
                 DrawRectWobble tx, ty, tw, mRoofH * 0.2, LC_KRYSHA, 0.07, JitterOn
                 DrawRectWobble tx + 0.6, ty + 0.6, tw - 1.2, mRoofH * 0.2 - 1.2, LC_KRYSHA, 0.05, JitterOn
-                AddObstacle tx - 0.3, ty - 0.3, tw + 0.6, mRoofH * 0.2 + 0.6
+                AddObstacleRect tx - 0.3, ty - 0.3, tw + 0.6, mRoofH * 0.2 + 0.6
                 mShapeCount = mShapeCount + 2
             End If
         Next si

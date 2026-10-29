@@ -48,7 +48,7 @@ Public Sub FasadPanel()
     On Error GoTo 0
 
     If Not okForm Then
-        If MsgBox("Не удалось создать диалоговое окно (доступ к VBA-проекту ограничен)." & vbCrLf & _
+        If MsgBox("Не удалось создать диалоговое окно (имя проекта или доступ к VBA)." & vbCrLf & _
                   "Запустить пошаговый мастер на InputBox?", vbYesNo + vbQuestion, _
                   "Генератор фасада") = vbNo Then Exit Sub
         WizardInputBoxes
@@ -82,6 +82,10 @@ Public Function ValidateSettings() As Boolean
     End If
     If NFloors < 1 Then NFloors = 1
     If NPlinth < 0 Then NPlinth = 0
+    If NFloors + NPlinth > 100 Then
+        MsgBox "Суммарное число этажей не должно превышать 100.", vbExclamation
+        Exit Function
+    End If
     If NSections < 1 Then NSections = 1
     If NSections > 12 Then NSections = 12
     If NEntrances < 0 Then NEntrances = 0
