@@ -45,7 +45,7 @@ Public Sub BuildFacade()
     DrawTextures
     If DetailsOn Then
         DrawDownpipes
-        DrawAirConditioners
+        ' Кондиционеры уже рисуются в DrawFloors по карте mACmap.
         DrawCracks
     End If
     DrawRoof

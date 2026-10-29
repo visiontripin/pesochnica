@@ -35,6 +35,17 @@ def logical_lines(text):
 
 
 fail = False
+# Вызовы без аргументов на отдельной строке должны ссылаться на процедуру
+# проекта. Это не полноценный компилятор VBA и не проверяет вызовы с аргументами.
+modules = [fn for fn in sorted(os.listdir(SRC)) if fn.endswith('.bas')]
+procedures = set()
+for fn in modules:
+    text = open(os.path.join(SRC, fn), encoding='utf-8').read()
+    procedures.update(name.lower() for name in re.findall(
+        r'^\s*(?:(?:Private|Public|Friend)\s+)?(?:Sub|Function)\s+(\w+)',
+        text, re.I | re.M))
+standalone_keywords = {'else', 'loop', 'wend', 'next', 'do', 'stop', 'return'}
+
 for fn in sorted(os.listdir(SRC)):
     if not fn.endswith(".bas"):
         continue
@@ -68,6 +79,12 @@ for fn in sorted(os.listdir(SRC)):
         fail = True
 
     for i, ln in enumerate(lines, 1):
+        standalone = re.fullmatch(r'\s*([A-Za-z]\w*)\s*', ln)
+        if standalone:
+            name = standalone.group(1).lower()
+            if name not in procedures and name not in standalone_keywords:
+                print(f'  строка {i}: возможный неопределённый вызов: {standalone.group(1)}')
+                fail = True
         if ln.count("(") != ln.count(")"):
             print(f"  строка {i}: скобки: {ln.strip()[:90]}")
             fail = True
