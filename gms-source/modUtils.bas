@@ -244,12 +244,12 @@ Public Sub DrawWobbleLine(x1 As Double, y1 As Double, x2 As Double, y2 As Double
     ln = Sqr((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
     If ln < 0.001 Then Exit Sub
 
-    Dim crv As Curve
-    Set crv = gDoc.CreateCurve
-    crv.StartSubPath x1, y1
+    Dim crv As Curve, sp As SubPath
+    Set crv = Application.CreateCurve(gDoc)
+    Set sp = crv.CreateSubPath(x1, y1)
 
     If Not jitterOn Or amp <= 0.0001 Then
-        crv.AppendLineSegment x2, y2
+        sp.AppendLineSegment x2, y2
     Else
         Dim n As Long: n = Int(ln / 3#)
         If n < 1 Then n = 1
@@ -263,9 +263,9 @@ Public Sub DrawWobbleLine(x1 As Double, y1 As Double, x2 As Double, y2 As Double
             bx = x1 + ux * ln * t
             by = y1 + uy * ln * t
             off = amp * (0.65 * Sin(t * 3.1415926 * 3# + phase) + 0.35 * RndRange(-1, 1))
-            crv.AppendLineSegment bx + nx * off, by + ny * off
+            sp.AppendLineSegment bx + nx * off, by + ny * off
         Next i
-        crv.AppendLineSegment x2, y2
+        sp.AppendLineSegment x2, y2
     End If
 
     Dim sh As Shape
@@ -282,14 +282,14 @@ Public Sub DrawRectWobble(x As Double, y As Double, w As Double, h As Double, _
 End Sub
 
 Public Sub DrawPoly(pts() As Double, layerIdx As Long, closed As Boolean)
-    Dim crv As Curve
-    Set crv = gDoc.CreateCurve
-    crv.StartSubPath pts(0, 0), pts(0, 1)
+    Dim crv As Curve, sp As SubPath
+    Set crv = Application.CreateCurve(gDoc)
+    Set sp = crv.CreateSubPath(pts(0, 0), pts(0, 1))
     Dim i As Long
     For i = 1 To UBound(pts, 1)
-        crv.AppendLineSegment pts(i, 0), pts(i, 1)
+        sp.AppendLineSegment pts(i, 0), pts(i, 1)
     Next i
-    If closed Then crv.AppendLineSegment pts(0, 0), pts(0, 1)
+    If closed Then sp.AppendLineSegment pts(0, 0), pts(0, 1)
     Dim sh As Shape
     Set sh = gLayers(layerIdx).CreateCurve(crv)
     ApplyStyle sh, layerIdx
@@ -324,11 +324,12 @@ Public Sub PrepareLayers(doc As Document)
     InitLayersData
     Dim i As Long, lyr As Layer
     For i = 1 To LAYER_COUNT
+        Set lyr = Nothing
         On Error Resume Next
-        Set lyr = doc.Layers(LayerNames(i))
+        Set lyr = doc.ActivePage.Layers(LayerNames(i))
         On Error GoTo 0
         If lyr Is Nothing Then
-            Set lyr = doc.Layers.Create(LayerNames(i))
+            Set lyr = doc.ActivePage.CreateLayer(LayerNames(i))
         End If
         lyr.Color.RGBAssign LayerR(i), LayerG(i), LayerB(i)
         Set gLayers(i) = lyr
