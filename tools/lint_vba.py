@@ -85,6 +85,9 @@ for fn in sorted(os.listdir(SRC)):
             if name not in procedures and name not in standalone_keywords:
                 print(f'  строка {i}: возможный неопределённый вызов: {standalone.group(1)}')
                 fail = True
+        if re.search(r':\s*\w+\s*=\s*[^:]+,\s*\w+\s+As\s+\w+', ln, re.I):
+            print(f'  строка {i}: объявление после присваивания: {ln.strip()}')
+            fail = True
         if ln.count("(") != ln.count(")"):
             print(f"  строка {i}: скобки: {ln.strip()[:90]}")
             fail = True

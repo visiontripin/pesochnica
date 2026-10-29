@@ -584,7 +584,8 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         Loop
     Else
         ' облицовочные панели: сетка прямоугольников с зазором TexGap
-        Dim pw As Double: pw = TexA, ph As Double: ph = TexB
+        Dim pw As Double, ph As Double
+        pw = TexA: ph = TexB
         Dim gy0 As Double: gy0 = CeilD(ya / ph) * ph
         y = gy0
         Do While y + ph <= ybnd + 0.01
