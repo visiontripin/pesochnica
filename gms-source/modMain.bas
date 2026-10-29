@@ -89,6 +89,7 @@ Public Function ValidateSettings() As Boolean
     If NSections < 1 Then NSections = 1
     If NSections > 12 Then NSections = 12
     If NEntrances < 0 Then NEntrances = 0
+    If NEntrances > NSections Then NEntrances = NSections
     If MarginMm < 1 Then MarginMm = 1
     If GapMin < 0.1 Then GapMin = 0.1
     If TexA < GapMin + 0.2 Then TexA = GapMin + 0.2

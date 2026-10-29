@@ -80,6 +80,37 @@ Public Sub BuildControls(d As Object)
     AddLabel d, "lblSeed", "Seed (рисунок):", 205, y + 3, 110
     AddText d, "txtSeed", 320, y, 60, CStr(Seed): y = y + 32
 
+    ' Подсказки доступны при наведении мыши на поля и списки.
+    SetTip d, "txtW", "Ширина панели в мм; стандарт светильника — 165."
+    SetTip d, "txtH", "Высота панели в мм; стандарт — 320."
+    SetTip d, "txtMargin", "Отступ фасада от края панели в миллиметрах."
+    SetTip d, "txtGap", "Минимальный технологический зазор для луча; проверьте пробой на материале."
+    SetTip d, "txtFloors", "Число жилых этажей, не включая цоколь."
+    SetTip d, "txtPlinth", "Число цокольных этажей под жилыми; подъезды располагаются на самом нижнем этаже."
+    SetTip d, "txtSections", "Число вертикальных секций фасада (1–12)."
+    SetTip d, "txtEntrances", "Количество подъездов: справа налево, не более числа секций."
+    SetTip d, "chkFoundation", "Включить фундамент под этажами."
+    SetTip d, "txtFoundH", "Высота фундамента в миллиметрах."
+    SetTip d, "cmbRoof", "Вид крыши; схема справа показывает её условно."
+    SetTip d, "cmbWindow", "Тип окон; при смешивании стилей тип может различаться по этажам."
+    SetTip d, "cmbTexture", "Тип отделки; размеры элементов задаются полями A и B."
+    SetTip d, "txtTexA", "Размер A в мм: длина кирпича, ширина доски или ширина панели."
+    SetTip d, "txtTexB", "Размер B в мм: высота кирпича, длина доски или высота панели."
+    SetTip d, "txtTexGap", "Зазор облицовочных панелей в миллиметрах."
+    SetTip d, "chkRandom", "Смешивать стили окон; на схеме это показано условно."
+    SetTip d, "chkJitter", "Небольшая неровность векторных линий."
+    SetTip d, "chkDetails", "Добавить инженерные детали и трещины."
+    SetTip d, "chkCanopy", "Добавить козырёк подъезда."
+    SetTip d, "txtSeed", "Число для воспроизводимого расположения деталей."
+    Dim preview As Object
+    Set preview = d.Controls.Add("Forms.Frame.1", "fraPreview")
+    preview.Caption = "Предпросмотр (схематично)"
+    preview.Left = 440: preview.Top = 10: preview.Width = 290: preview.Height = 395
+    Dim note As Object
+    Set note = d.Controls.Add("Forms.Label.1", "lblPreviewInfo")
+    note.Left = 440: note.Top = 408: note.Width = 290: note.Height = 36
+    note.Caption = "Схема не заменяет проверку линий перед гравировкой."
+
     ' Эти две кнопки созданы в конструкторе UserForm, поэтому их события работают.
     With d.Controls("btnOk")
         .Left = 180: .Top = y: .Width = 120: .Height = 24
@@ -135,3 +166,7 @@ Private Function NumStrPub(v As Double) As String
     NumStrPub = Replace(CStr(v), ",", ".")
 End Function
 
+
+Private Sub SetTip(ByVal d As Object, ByVal name As String, ByVal text As String)
+    d.Controls(name).ControlTipText = text
+End Sub

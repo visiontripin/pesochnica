@@ -1,9 +1,12 @@
 Option Explicit
 
+Private mWatchers As Collection
+Private mPreviewBusy As Boolean
+
 ' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
 Private Sub UserForm_Initialize()
     Me.Caption = "Генератор фасада панельного дома"
-    Me.Width = 472
+    Me.Width = 760
     Me.Height = 500
     BuildControls Me
 
@@ -33,6 +36,8 @@ Private Sub UserForm_Initialize()
     Me.Controls("chkJitter").Value = JitterOn
     Me.Controls("chkDetails").Value = DetailsOn
     Me.Controls("chkCanopy").Value = CanopyOn
+    SetupPreviewEvents
+    RefreshPreview
 End Sub
 
 Private Sub btnOk_Click()
@@ -59,11 +64,13 @@ Private Sub btnOk_Click()
     Seed = NumL(Me.Controls("txtSeed").Text, Seed)
     If Not ValidateSettings Then Exit Sub
     FormCancelled = False
+    StopPreviewEvents
     Me.Hide
 End Sub
 
 Private Sub btnCancel_Click()
     FormCancelled = True
+    StopPreviewEvents
     Me.Hide
 End Sub
 
@@ -71,6 +78,190 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = 0 Then
         Cancel = True
         FormCancelled = True
+        StopPreviewEvents
         Me.Hide
     End If
+End Sub
+
+' Динамические элементы создаются на форме программно, поэтому их события
+' подключаются через отдельный класс и живут до закрытия формы.
+Private Sub SetupPreviewEvents()
+    Dim names As Variant, name As Variant, watcher As clsFacadePreview
+    names = Array("txtW", "txtH", "txtMargin", "txtGap", "txtFloors", "txtPlinth", _
+                  "txtSections", "txtEntrances", "chkFoundation", "txtFoundH", _
+                  "cmbRoof", "cmbWindow", "cmbTexture", "txtTexA", "txtTexB", _
+                  "txtTexGap", "chkRandom", "chkJitter", "chkDetails", "chkCanopy", "txtSeed")
+    Set mWatchers = New Collection
+    For Each name In names
+        Set watcher = New clsFacadePreview
+        watcher.Attach Me, Me.Controls(CStr(name))
+        mWatchers.Add watcher
+    Next name
+End Sub
+
+Private Sub StopPreviewEvents()
+    Dim watcher As clsFacadePreview
+    If mWatchers Is Nothing Then Exit Sub
+    For Each watcher In mWatchers
+        watcher.Detach
+    Next watcher
+    Set mWatchers = Nothing
+End Sub
+
+' Схема построена из элементов самой формы, а не из фигур CorelDRAW.
+' Она намеренно упрощена и не является технологической проверкой макета.
+Public Sub RefreshPreview()
+    If mPreviewBusy Then Exit Sub
+    mPreviewBusy = True
+    On Error GoTo failed
+
+    Dim box As Object, i As Long
+    Set box = Me.Controls("fraPreview")
+    For i = box.Controls.Count - 1 To 0 Step -1
+        box.Controls.Remove box.Controls(i).Name
+    Next i
+
+    Dim w As Double, h As Double, found As Double
+    w = PreviewNumber("txtW", 165, 40, 2000)
+    h = PreviewNumber("txtH", 320, 60, 2000)
+    Dim floors As Long, plinth As Long, sections As Long, entrances As Long
+    floors = CLng(PreviewNumber("txtFloors", 9, 1, 100))
+    plinth = CLng(PreviewNumber("txtPlinth", 1, 0, 99))
+    sections = CLng(PreviewNumber("txtSections", 5, 1, 12))
+    entrances = CLng(PreviewNumber("txtEntrances", 1, 0, sections))
+    Dim showFloors As Long, showSections As Long
+    showFloors = floors + plinth: If showFloors > 12 Then showFloors = 12
+    showSections = sections: If showSections > 8 Then showSections = 8
+
+    Dim scale As Double, pw As Double, ph As Double, px As Double, py As Double
+    scale = 250 / w: If h * scale > 335 Then scale = 335 / h
+    pw = w * scale: ph = h * scale
+    px = (270 - pw) / 2 + 4: py = 20 + (340 - ph) / 2
+    Dim itemNo As Long, wallColor As Long
+    Select Case Me.Controls("cmbTexture").ListIndex
+        Case 0: wallColor = RGB(224, 193, 170)
+        Case 1: wallColor = RGB(218, 202, 170)
+        Case Else: wallColor = RGB(210, 215, 219)
+    End Select
+    PreviewRect box, itemNo, px, py, pw, ph, RGB(250, 249, 245), True
+    Dim fh As Double, rh As Double, roof As Long
+    roof = Me.Controls("cmbRoof").ListIndex
+    If CBool(Me.Controls("chkFoundation").Value) Then
+        found = PreviewNumber("txtFoundH", 12, 0, h / 3)
+        fh = found * scale
+    End If
+    If roof <> 3 Then rh = ph * 0.1
+    Dim margin As Double
+    margin = PreviewNumber("txtMargin", 4, 1, w / 4) * scale
+    If margin < 2 Then margin = 2
+    Dim wallTop As Double, wallBottom As Double, cellH As Double, cellW As Double
+    wallTop = py + margin + rh
+    wallBottom = py + ph - margin - fh
+    If wallBottom <= wallTop + 4 Then GoTo done
+    cellH = (wallBottom - wallTop) / showFloors
+    cellW = (pw - 2 * margin) / showSections
+    PreviewRect box, itemNo, px + margin, wallTop, pw - 2 * margin, _
+                wallBottom - wallTop, wallColor, True
+    ' Условные линии отделки: без имитации точного шага и лазерного зазора.
+    Dim texture As Long, lineNo As Long, jointNo As Long
+    Dim lineY As Double, jointX As Double, wallW As Double, wallH As Double
+    texture = Me.Controls("cmbTexture").ListIndex
+    wallW = pw - 2 * margin: wallH = wallBottom - wallTop
+    For lineNo = 1 To 8
+        lineY = wallTop + wallH * lineNo / 9
+        PreviewRect box, itemNo, px + margin, lineY, wallW, 1, RGB(168, 157, 145), False
+        If texture = 0 Then
+            For jointNo = 1 To 4
+                jointX = px + margin + wallW * (jointNo + 0.35 * (lineNo Mod 2)) / 5
+                PreviewRect box, itemNo, jointX, lineY, 1, wallH / 18, RGB(168, 157, 145), False
+            Next jointNo
+        End If
+    Next lineNo
+    If texture = 2 Then
+        For jointNo = 1 To 4
+            jointX = px + margin + wallW * jointNo / 5
+            PreviewRect box, itemNo, jointX, wallTop, 1, wallH, RGB(168, 157, 145), False
+        Next jointNo
+    End If
+    If fh > 0 Then PreviewRect box, itemNo, px + margin, wallBottom, pw - 2 * margin, fh, RGB(145, 132, 115), True
+    If rh > 0 Then
+        Dim roofStep As Long, roofX As Double, roofH As Double, roofW As Double
+        roofW = (pw - 2 * margin) / 8
+        For roofStep = 0 To 7
+            Select Case roof
+                Case 1 ' двускатная: условные ступени к коньку
+                    If roofStep < 4 Then roofH = rh * (roofStep + 1) / 4 Else roofH = rh * (8 - roofStep) / 4
+                Case 2 ' односкатная
+                    roofH = rh * (roofStep + 1) / 8
+                Case Else
+                    roofH = rh * 0.55
+            End Select
+            roofX = px + margin + roofStep * roofW
+            PreviewRect box, itemNo, roofX, wallTop - roofH, roofW + 0.5, roofH, RGB(164, 171, 179), False
+        Next roofStep
+    End If
+
+    Dim row As Long, col As Long, xx As Double, yy As Double, style As Long
+    Dim wi As Double, hi As Double, k As Long, sashes As Long, isDoor As Boolean
+    style = Me.Controls("cmbWindow").ListIndex
+    For row = 0 To showFloors - 1
+        yy = wallBottom - (row + 1) * cellH
+        If row < plinth Then PreviewRect box, itemNo, px + margin, yy, _
+            pw - 2 * margin, cellH, RGB(200, 187, 170), True
+        For col = 0 To showSections - 1
+            xx = px + margin + col * cellW
+            isDoor = (row = 0 And col >= showSections - entrances)
+            If isDoor Then
+                PreviewRect box, itemNo, xx + cellW * 0.3, yy + cellH * 0.14, _
+                            cellW * 0.4, cellH * 0.84, RGB(127, 97, 77), True
+            Else
+                wi = cellW * 0.58: hi = cellH * 0.56
+                PreviewRect box, itemNo, xx + (cellW - wi) / 2, yy + cellH * 0.2, _
+                            wi, hi, RGB(207, 227, 242), True
+                sashes = style + 1: If sashes > 3 Then sashes = 2
+                If sashes < 1 Then sashes = 1
+                For k = 1 To sashes - 1
+                    PreviewRect box, itemNo, xx + (cellW - wi) / 2 + wi * k / sashes, _
+                                yy + cellH * 0.2, 1, hi, RGB(80, 95, 108), False
+                Next k
+                If style = 3 Then PreviewRect box, itemNo, xx + (cellW - wi) / 2, _
+                    yy + cellH * 0.2 + hi * 0.3, wi, 1, RGB(80, 95, 108), False
+            End If
+        Next col
+    Next row
+    Me.Controls("lblPreviewInfo").Caption = "Схема: " & CStr(floors + plinth) & " этажей, " & _
+        CStr(sections) & " секций; подъезды — снизу." & vbCrLf & _
+        "Фактура A×B: " & Me.Controls("txtTexA").Text & " × " & Me.Controls("txtTexB").Text & _
+        " мм; детали условны."
+    If floors + plinth > showFloors Or sections > showSections Then
+        Me.Controls("lblPreviewInfo").Caption = Me.Controls("lblPreviewInfo").Caption & " Показано не более 12 этажей и 8 секций."
+    End If
+done:
+    mPreviewBusy = False
+    Exit Sub
+failed:
+    On Error Resume Next
+    Me.Controls("lblPreviewInfo").Caption = "Предпросмотр недоступен: " & Err.Description
+    mPreviewBusy = False
+End Sub
+
+Private Function PreviewNumber(ByVal name As String, ByVal fallback As Double, _
+                               ByVal lower As Double, ByVal upper As Double) As Double
+    Dim value As Double
+    value = Num(CStr(Me.Controls(name).Text), fallback)
+    If value < lower Then value = lower
+    If value > upper Then value = upper
+    PreviewNumber = value
+End Function
+
+Private Sub PreviewRect(ByVal box As Object, ByRef itemNo As Long, _
+                        ByVal x As Double, ByVal y As Double, ByVal w As Double, _
+                        ByVal h As Double, ByVal color As Long, ByVal bordered As Boolean)
+    If w < 1 Or h < 1 Then Exit Sub
+    Dim item As Object
+    itemNo = itemNo + 1
+    Set item = box.Controls.Add("Forms.Label.1", "p" & CStr(itemNo))
+    item.Left = x: item.Top = y: item.Width = w: item.Height = h
+    item.Caption = "": item.BackStyle = 1: item.BackColor = color
+    If bordered Then item.BorderStyle = 1
 End Sub

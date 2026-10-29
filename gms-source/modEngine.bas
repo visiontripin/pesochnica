@@ -292,7 +292,9 @@ Private Sub RegisterAllOpenings()
     For i = 1 To mNSec
         If mSecType(i) = 2 Then
             For f = NPlinth To mNF - 1
-                cands(cnt) = i * 1000 + f: cnt = cnt + 1
+                If Not IsEntrance(i, f) Then
+                    cands(cnt) = i * 1000 + f: cnt = cnt + 1
+                End If
             Next f
         End If
     Next i
@@ -313,6 +315,11 @@ Private Sub RegisterAllOpenings()
     End If
 End Sub
 
+Private Function IsEntrance(si As Long, f As Long) As Boolean
+    ' Подъезды находятся только на самом нижнем этаже, считая цоколь.
+    IsEntrance = (f = 0 And si > mNSec - NEntrances)
+End Function
+
 Private Sub RegisterSectionOpening(si As Long, f As Long)
     Dim x0 As Double, x1 As Double, yb As Double, cx As Double
     x0 = mSecX1(si): x1 = mSecX2(si): yb = mFY(f): cx = (x0 + x1) / 2
@@ -321,6 +328,10 @@ Private Sub RegisterSectionOpening(si As Long, f As Long)
     wh = mFloorH * 0.53
     wy = yb + mFloorH * 0.3
 
+    If IsEntrance(si, f) Then
+        AddObstacleRect x0 + 0.3, yb + 0.3, (x1 - x0) - 0.6, mFloorH - 0.6
+        Exit Sub
+    End If
     Select Case mSecType(si)
         Case 0 ' одинарные окна
             AddObstacleRect cx - sw / 2 - 1.4, wy - 2.2, sw + 2.8, wh + 2.6
@@ -371,6 +382,10 @@ Private Sub DrawSection(si As Long, f As Long)
     wh = mFloorH * 0.53
     wy = yb + mFloorH * 0.3
     Dim st As Long: st = WindowStyleFor(si, f)
+    If IsEntrance(si, f) Then
+        DrawEntrance x0, x1, yb
+        Exit Sub
+    End If
 
     Select Case mSecType(si)
         Case 0
@@ -388,11 +403,7 @@ Private Sub DrawSection(si As Long, f As Long)
         Case 3
             DrawGlazed x0, x1, yb
         Case 4
-            If f = NPlinth And NEntrances > 0 Then
-                DrawEntrance x0, x1, yb
-            Else
-                DrawLoggia x0, x1, yb
-            End If
+            DrawLoggia x0, x1, yb
     End Select
 End Sub
 
@@ -602,7 +613,7 @@ Private Sub DrawTextures()
     For f = 0 To mNF - 1
         FacadeProgress "фактура, этаж " & CStr(f + 1) & " из " & CStr(mNF), 25 + CLng(60# * f / mNF)
         For si = 1 To mNSec
-            If mSecType(si) <> 4 Then DrawTextureSection si, f
+            If mSecType(si) <> 4 And Not IsEntrance(si, f) Then DrawTextureSection si, f
         Next si
     Next f
 End Sub
