@@ -54,6 +54,11 @@ Public Sub BuildControls(d As Object)
     AddLabel d, "lblEntrances", "Подъезды:", 205, y + 3, 70
     AddText d, "txtEntrances", 280, y, 60, CStr(NEntrances): y = y + 26
 
+    AddLabel d, "lblSecTypes", "Типы секций:", 10, y + 3, 100
+    AddText d, "txtSecTypes", 115, y, 257, SectionTypes: y = y + 26
+    AddLabel d, "lblEntList", "Подъезды №:", 10, y + 3, 100
+    AddText d, "txtEntList", 115, y, 257, EntranceSections: y = y + 26
+
     AddCheck d, "chkFoundation", "Фундамент", 10, y + 2, 90
     AddLabel d, "lblFoundH", "высота, мм:", 120, y + 3, 80
     AddText d, "txtFoundH", 205, y, 70, NumStrPub(FoundationH): y = y + 30
@@ -75,7 +80,10 @@ Public Sub BuildControls(d As Object)
 
     Header d, "Детализация и стиль линий", 10, y: y = y + 20
     AddCheck d, "chkJitter", "Живые (неидеальные) линии", 10, y + 2, 180
-    AddCheck d, "chkDetails", "Водостоки, кондиционеры, трещины", 205, y + 2, 240: y = y + 24
+    AddCheck d, "chkBalconies", "Балконы", 205, y + 2, 100: y = y + 24
+    AddCheck d, "chkAC", "Кондиционеры", 10, y + 2, 120
+    AddCheck d, "chkPipes", "Трубы", 135, y + 2, 70
+    AddCheck d, "chkCracks", "Трещины", 210, y + 2, 90: y = y + 24
     AddCheck d, "chkCanopy", "Козырёк подъезда", 10, y + 2, 150
     AddLabel d, "lblSeed", "Seed (рисунок):", 205, y + 3, 110
     AddText d, "txtSeed", 320, y, 60, CStr(Seed): y = y + 32
@@ -99,7 +107,12 @@ Public Sub BuildControls(d As Object)
     SetTip d, "txtTexGap", "Зазор облицовочных панелей в миллиметрах."
     SetTip d, "chkRandom", "Смешивать стили окон; на схеме это показано условно."
     SetTip d, "chkJitter", "Небольшая неровность векторных линий."
-    SetTip d, "chkDetails", "Добавить инженерные детали и трещины."
+    SetTip d, "txtSecTypes", "Пусто: автоматически. Или тип для каждой секции через ; — 0 окно, 1 балкон, 2 парные окна, 3 остекление, 4 лоджия."
+    SetTip d, "txtEntList", "Пусто: справа по количеству. Иначе номера секций через ;, например 1;3."
+    SetTip d, "chkAC", "Блоки только под окнами и при достаточном свободном месте."
+    SetTip d, "chkPipes", "Включить водосточные трубы."
+    SetTip d, "chkCracks", "Включить трещины."
+    SetTip d, "chkBalconies", "Балконные секции; при отключении заменяются окнами."
     SetTip d, "chkCanopy", "Добавить козырёк подъезда."
     SetTip d, "txtSeed", "Число для воспроизводимого расположения деталей."
     Dim preview As Object
@@ -110,6 +123,18 @@ Public Sub BuildControls(d As Object)
     Set note = d.Controls.Add("Forms.Label.1", "lblPreviewInfo")
     note.Left = 440: note.Top = 408: note.Width = 290: note.Height = 36
     note.Caption = "Схема не заменяет проверку линий перед гравировкой."
+
+    AddLabel d, "lblTemplates", "Шаблон фасада:", 440, 449, 125
+    AddCombo d, "cmbTemplate", 440, 468, 198
+    Dim saveButton As Object
+    Set saveButton = d.Controls.Add("Forms.CommandButton.1", "btnSaveTemplate")
+    saveButton.Left = 645: saveButton.Top = 468: saveButton.Width = 85: saveButton.Height = 18
+    saveButton.Caption = "Сохранить"
+    AddLabel d, "lblCladding", "Пресет отделки:", 440, 492, 125
+    AddCombo d, "cmbCladding", 440, 510, 290
+    SetTip d, "cmbTemplate", "Шесть шаблонов здания и ваши сохранённые пресеты."
+    SetTip d, "btnSaveTemplate", "Сохранить настройки под именем для текущего пользователя Windows."
+    SetTip d, "cmbCladding", "Стартовые варианты кирпича, досок и панелей с размерами в миллиметрах."
 
     ' Эти две кнопки созданы в конструкторе UserForm, поэтому их события работают.
     With d.Controls("btnOk")

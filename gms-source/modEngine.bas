@@ -68,7 +68,7 @@ Public Sub BuildFacade()
     FacadeProgress stage, 5
     ComputeZones
     ComputeSections
-    RegisterDownpipeObstacles
+    If PipesOn Then RegisterDownpipeObstacles
     RegisterAllOpenings
     stage = "каркас и проёмы"
     FacadeProgress stage, 10
@@ -80,10 +80,8 @@ Public Sub BuildFacade()
     DrawTextures
     stage = "детали и крыша"
     FacadeProgress stage, 90
-    If DetailsOn Then
-        DrawDownpipes
-        DrawCracks
-    End If
+    If PipesOn Then DrawDownpipes
+    If CracksOn Then DrawCracks
     DrawRoof
     FacadeProgress "завершение", 100
     GoTo cleanup
@@ -182,7 +180,8 @@ Private Sub ComputeSections()
     Dim i As Long, x As Double
     x = mX0
     For i = 1 To mNSec
-        mSecType(i) = base((i - 1) Mod 5)
+        mSecType(i) = SectionTypeAt(i, SectionTypes)
+        If Not BalconiesOn And (mSecType(i) = 1 Or mSecType(i) = 4) Then mSecType(i) = 0
         mSecX1(i) = x
         If i = mNSec Then
             mSecX2(i) = mX1
@@ -240,8 +239,9 @@ Private Sub DrawFoundation()
     Dim i As Long
     For i = 0 To mNF - 1
         If mFK(i) = 0 Then
-            DrawWobbleLine mX0 + 0.8, mFY(i) + mFloorH * 0.18, mX1 - 0.8, _
-                           mFY(i) + mFloorH * 0.18, LC_TSEKOL, 0.09, JitterOn
+            DrawHClip mFY(i) + mFloorH * 0.18, mX0 + 0.8, mX1 - 0.8, _
+                      LC_TSEKOL, GapMin + 0.3, 0.09, JitterOn
+            ' Решётка допускается только вне зарегистрированных проёмов.
             DrawVentGrille mX0 + (mX1 - mX0) * 0.3, mFY(i) + mFloorH * 0.3
             mShapeCount = mShapeCount + 1
         End If
@@ -251,6 +251,8 @@ End Sub
 Private Sub DrawVentGrille(x As Double, y As Double)
     Dim w As Double, h As Double
     w = MaxD(6, PanelW * 0.05): h = MaxD(2.6, mFloorH * 0.12)
+    If Not RectFree(x, y, x + w, y + h, GapMin + 0.3) Then Exit Sub
+    If y < mFoundH And y + h > mFoundH - GapMin Then Exit Sub
     DrawRectWobble x, y, w, h, LC_TSEKOL, 0.06, JitterOn
     Dim k As Long, gx As Double
     For k = 1 To 4
@@ -290,7 +292,7 @@ Private Sub RegisterAllOpenings()
     ReDim cands(0 To mNSec * mNF)
     cnt = 0
     For i = 1 To mNSec
-        If mSecType(i) = 2 Then
+        If ACOn And mSecType(i) = 2 Then
             For f = NPlinth To mNF - 1
                 If Not IsEntrance(i, f) Then
                     cands(cnt) = i * 1000 + f: cnt = cnt + 1
@@ -317,7 +319,7 @@ End Sub
 
 Private Function IsEntrance(si As Long, f As Long) As Boolean
     ' Подъезды находятся только на самом нижнем этаже, считая цоколь.
-    IsEntrance = (f = 0 And si > mNSec - NEntrances)
+    IsEntrance = (f = 0 And EntranceAt(si, mNSec, NEntrances, EntranceSections))
 End Function
 
 Private Sub RegisterSectionOpening(si As Long, f As Long)
@@ -349,17 +351,26 @@ Private Sub RegisterSectionOpening(si As Long, f As Long)
     End Select
 End Sub
 
+Private Function ACPosition(ByVal si As Long, ByVal fl As Long, ByVal side As String, _
+                            ByRef x As Double, ByRef y As Double, ByRef w As Double, ByRef h As Double) As Boolean
+    Dim x0 As Double, secW As Double, yb As Double, cx As Double
+    x0 = mSecX1(si): secW = mSecX2(si) - x0: yb = mFY(fl)
+    w = MaxD(4.2, secW * 0.14): h = MaxD(2.6, mFloorH * 0.1)
+    If side = "L" Then cx = x0 + secW * 0.26 Else cx = x0 + secW * 0.74
+    x = cx - w / 2: y = yb + mFloorH * 0.16 - h
+    If x < x0 + GapMin Or x + w > mSecX2(si) - GapMin Then Exit Function
+    If y - 0.8 < yb + GapMin Then Exit Function
+    If y + h + GapMin > yb + mFloorH * 0.3 - 2.3 Then Exit Function
+    ACPosition = RectFree(x, y - 0.8, x + w, y + h, GapMin + 0.3)
+End Function
+
 Private Sub RegisterACObstacle(si As Long, fl As Long)
-    Dim x0 As Double: x0 = mSecX1(si)
-    Dim yb As Double: yb = mFY(fl)
-    Dim acx As Double, aw As Double
-    aw = MaxD(4.2, (mSecX2(si) - x0) * 0.14)
-    If mACmap(si * mNF + fl) = "L" Then
-        acx = x0 + (mSecX2(si) - x0) * 0.24
+    Dim x As Double, y As Double, w As Double, h As Double
+    If ACPosition(si, fl, mACmap(si * mNF + fl), x, y, w, h) Then
+        AddObstacleRect x - 0.4, y - 1.2, w + 0.8, h + 1.6
     Else
-        acx = x0 + (mSecX2(si) - x0) * 0.76
+        mACmap(si * mNF + fl) = ""
     End If
-    AddObstacleRect acx - aw / 2 - 0.4, yb + 0.9, aw + 0.8, MaxD(3.2, mFloorH * 0.12) + 0.8
 End Sub
 
 ' ------------------------------------------------------------
@@ -397,7 +408,7 @@ Private Sub DrawSection(si As Long, f As Long)
         Case 2
             DrawWindow x0 + (x1 - x0) * 0.08, wy, sw, wh, st
             DrawWindow x1 - (x1 - x0) * 0.08 - sw, wy, sw, wh, (st + 1) Mod 4
-            If DetailsOn And Len(mACmap(si * mNF + f)) > 0 Then DrawAC si, f
+            If ACOn And Len(mACmap(si * mNF + f)) > 0 Then DrawAC si, f
         Case 1
             DrawBalcony cx, yb, x1 - x0
         Case 3
@@ -647,7 +658,7 @@ Private Sub DrawTextureSection(si As Long, f As Long)
     ElseIf TextureType = 1 Then
         ' горизонтальные доски: длинные линии + разбежка стыков
         Dim boardW As Double: boardW = TexA
-        Dim boardL As Double: boardL = TexB * 4
+        Dim boardL As Double: boardL = TexB
         y = CeilD(ya / boardW) * boardW
         row = 0
         Do While y <= ybnd
@@ -660,6 +671,8 @@ Private Sub DrawTextureSection(si As Long, f As Long)
             Loop
             y = y + boardW: row = row + 1
         Loop
+    ElseIf TextureType = 3 Then
+        DrawStoneTexture x0, x1, ya, ybnd, margin
     Else
         ' облицовочные панели: сетка прямоугольников с зазором TexGap
         Dim pw As Double, ph As Double
@@ -669,8 +682,8 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         Do While y + ph <= ybnd + 0.01
             x = CeilD(x0 / pw) * pw
             Do While x + pw <= x1 + 0.01
-                If PointFree(x + TexGap, y + TexGap, margin) And _
-                   PointFree(x + pw - TexGap, y + ph - TexGap, margin) Then
+                If RectFree(x + TexGap / 2, y + TexGap / 2, _
+                            x + pw - TexGap / 2, y + ph - TexGap / 2, margin) Then
                     DrawRectWobble x + TexGap / 2, y + TexGap / 2, _
                                    pw - TexGap, ph - TexGap, LC_KLADKA, 0.04, JitterOn
                     mShapeCount = mShapeCount + 1
@@ -680,6 +693,44 @@ Private Sub DrawTextureSection(si As Long, f As Long)
             y = y + ph
         Loop
     End If
+End Sub
+
+Private Sub DrawStoneTexture(ByVal x0 As Double, ByVal x1 As Double, _
+                             ByVal ya As Double, ByVal yb As Double, ByVal margin As Double)
+    ' Условные неровные каменные блоки; целиком пропускаем камень у проёма.
+    Dim gap As Double, y As Double, x As Double, row As Long, offset As Double
+    gap = MaxD(TexGap, GapMin + 0.2)
+    If gap >= TexA Or gap >= TexB Then Exit Sub
+    y = CeilD(ya / TexB) * TexB
+    Do While y + TexB <= yb
+        If row Mod 2 = 0 Then offset = 0 Else offset = TexA / 2
+        x = CeilD((x0 - offset) / TexA) * TexA + offset
+        Do While x + TexA <= x1
+            Dim sx1 As Double, sy1 As Double, sx2 As Double, sy2 As Double
+            sx1 = x + gap / 2: sy1 = y + gap / 2
+            sx2 = x + TexA - gap / 2: sy2 = y + TexB - gap / 2
+            If RectFree(sx1, sy1, sx2, sy2, margin) Then
+                DrawStone sx1, sy1, sx2, sy2
+            End If
+            x = x + TexA
+        Loop
+        y = y + TexB: row = row + 1
+    Loop
+End Sub
+
+Private Sub DrawStone(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double)
+    Dim pts(0 To 7, 0 To 1) As Double, rx As Double, ry As Double
+    rx = (x2 - x1) * RndRange(0.12, 0.28)
+    ry = (y2 - y1) * RndRange(0.12, 0.28)
+    pts(0, 0) = x1 + rx: pts(0, 1) = y1
+    pts(1, 0) = x2 - rx: pts(1, 1) = y1
+    pts(2, 0) = x2: pts(2, 1) = y1 + ry
+    pts(3, 0) = x2: pts(3, 1) = y2 - ry
+    pts(4, 0) = x2 - rx: pts(4, 1) = y2
+    pts(5, 0) = x1 + rx: pts(5, 1) = y2
+    pts(6, 0) = x1: pts(6, 1) = y2 - ry
+    pts(7, 0) = x1: pts(7, 1) = y1 + ry
+    DrawPoly pts, LC_KLADKA, True
 End Sub
 
 ' ------------------------------------------------------------
@@ -726,7 +777,7 @@ Private Sub DrawAC(si As Long, fl As Long)
     Dim aw As Double, ah As Double
     aw = MaxD(4.2, secW * 0.14): ah = MaxD(2.6, mFloorH * 0.1)
     Dim acx As Double
-    If mACmap(si * mNF + fl) = "L" Then acx = x0 + secW * 0.24 Else acx = x0 + secW * 0.76
+    If mACmap(si * mNF + fl) = "L" Then acx = x0 + secW * 0.26 Else acx = x0 + secW * 0.74
     Dim topY As Double: topY = yb + mFloorH * 0.16
     Dim x As Double, y As Double
     x = acx - aw / 2: y = topY - ah
@@ -749,19 +800,6 @@ Private Sub DrawAC(si As Long, fl As Long)
     ' кронштейны
     DrawWobbleLine x + 0.6, y, x + 0.6, y - 0.75, LC_KONDICIONER, 0.03, JitterOn
     DrawWobbleLine x + aw - 0.6, y, x + aw - 0.6, y - 0.75, LC_KONDICIONER, 0.03, JitterOn
-    ' гибкая подводка
-    Dim px As Double: px = x + 0.9
-    Dim pts(0 To 8, 0 To 1) As Double
-    pts(0, 0) = px: pts(0, 1) = topY
-    pts(1, 0) = px: pts(1, 1) = topY + 0.9
-    Dim r As Double: r = 0.8
-    For k = 1 To 6
-        a = -1.5708 * k / 6
-        pts(k + 1, 0) = px + r + r * Cos(a + 1.5708)
-        pts(k + 1, 1) = topY + 0.9 + r * Sin(a + 1.5708)
-    Next k
-    pts(8, 0) = px + r: pts(8, 1) = topY + 2.1
-    DrawPoly pts, LC_KONDICIONER, False
     mShapeCount = mShapeCount + 10
 End Sub
 

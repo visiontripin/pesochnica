@@ -243,6 +243,18 @@ Public Function PointFree(x As Double, y As Double, margin As Double) As Boolean
     PointFree = True
 End Function
 
+Public Function RectFree(ByVal x1 As Double, ByVal y1 As Double, _
+                         ByVal x2 As Double, ByVal y2 As Double, ByVal margin As Double) As Boolean
+    Dim i As Long
+    RectFree = False
+    If x2 <= x1 Or y2 <= y1 Then Exit Function
+    For i = 0 To mObsCount - 1
+        If x1 < mObsX2(i) + margin And x2 > mObsX1(i) - margin And _
+           y1 < mObsY2(i) + margin And y2 > mObsY1(i) - margin Then Exit Function
+    Next i
+    RectFree = True
+End Function
+
 ' "живая" ломаная: синусоидальная волна + случайная компонента, концы фиксированы
 Public Sub DrawWobbleLine(x1 As Double, y1 As Double, x2 As Double, y2 As Double, _
                           layerIdx As Long, amp As Double, jitterOn As Boolean)

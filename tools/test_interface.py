@@ -34,10 +34,29 @@ class InterfaceChecks(unittest.TestCase):
 
     def test_entrance_only_on_lowest_floor(self):
         engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
-        self.assertIn("IsEntrance = (f = 0 And si > mNSec - NEntrances)", engine)
+        self.assertIn("IsEntrance = (f = 0 And EntranceAt(si, mNSec, NEntrances, EntranceSections))", engine)
         self.assertIn("If IsEntrance(si, f) Then", engine)
         self.assertNotIn("If f = NPlinth And NEntrances > 0 Then", engine)
         self.assertIn("If NEntrances > NSections Then NEntrances = NSections", (SRC / "modMain.bas").read_text(encoding="utf-8"))
+
+    def test_detail_controls_and_template_persistence(self):
+        module = (SRC / "modFormRuntime.bas").read_text(encoding="utf-8")
+        form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
+        cls = (SRC / "clsFacadePreview.cls").read_text(encoding="utf-8")
+        for name in ("txtSecTypes", "txtEntList", "chkAC", "chkPipes", "chkCracks", "chkBalconies", "cmbTemplate", "cmbCladding", "btnSaveTemplate"):
+            self.assertIn('"' + name + '"', module)
+            self.assertIn('"' + name + '"', form)
+        self.assertIn("mOwner.SaveCurrentTemplate", cls)
+        self.assertIn("SaveSetting \"FasadPanel\"", form)
+        self.assertIn("LoadPresetFields spec", form)
+
+    def test_obstacle_checks_used_for_details(self):
+        engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
+        self.assertIn("If Not RectFree(x, y, x + w, y + h, GapMin + 0.3) Then Exit Sub", engine)
+        self.assertIn("ACPosition = RectFree", engine)
+        self.assertIn("If IsEntrance(si, f) Then", engine)
+        self.assertIn("If ACOn And mSecType(i) = 2 Then", engine)
+        self.assertIn("Private Sub DrawStoneTexture", engine)
 
 
 if __name__ == "__main__":

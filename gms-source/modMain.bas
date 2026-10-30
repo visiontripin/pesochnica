@@ -23,7 +23,7 @@ Public FoundationH As Double
 Public RoofType As Long       ' 0 плоская, 1 двускатная, 2 односкатная, 3 нет
 Public WindowType As Long     ' 0..4 (4 = балконный блок)
 Public RandomStyles As Boolean
-Public TextureType As Long    ' 0 кирпич, 1 доски, 2 панели
+Public TextureType As Long    ' 0 кирпич, 1 доски, 2 панели, 3 каменные блоки
 Public TexA As Double         ' кирпич: длина / доски: ширина / панели: ширина
 Public TexB As Double         ' кирпич: высота ряда / доски: длина / панели: высота
 Public TexGap As Double       ' зазор между панелями
@@ -32,6 +32,9 @@ Public TexGap As Double       ' зазор между панелями
 Public JitterOn As Boolean
 Public DetailsOn As Boolean
 Public CanopyOn As Boolean
+Public ACOn As Boolean, PipesOn As Boolean, CracksOn As Boolean, BalconiesOn As Boolean
+' Пустая строка означает автоматическую схему; иначе номера через точку с запятой.
+Public SectionTypes As String, EntranceSections As String
 Public Seed As Long
 
 Public FormCancelled As Boolean
@@ -69,9 +72,11 @@ Public Sub ApplyDefaultPreset()
     RoofType = 0
     WindowType = 1: RandomStyles = True
     TextureType = 0
-    TexA = 4#: TexB = 1.7: TexGap = 0.4
+    TexA = 4#: TexB = 1.7: TexGap = 0.5
     JitterOn = True: DetailsOn = True: CanopyOn = True
     Seed = 101
+    ACOn = True: PipesOn = True: CracksOn = True: BalconiesOn = True
+    SectionTypes = "": EntranceSections = ""
 End Sub
 
 Public Function ValidateSettings() As Boolean
@@ -90,12 +95,81 @@ Public Function ValidateSettings() As Boolean
     If NSections > 12 Then NSections = 12
     If NEntrances < 0 Then NEntrances = 0
     If NEntrances > NSections Then NEntrances = NSections
+    If Not ValidateSectionLists() Then Exit Function
     If MarginMm < 1 Then MarginMm = 1
     If GapMin < 0.1 Then GapMin = 0.1
     If TexA < GapMin + 0.2 Then TexA = GapMin + 0.2
     If TexB < GapMin + 0.2 Then TexB = GapMin + 0.2
+    If TextureType = 2 Or TextureType = 3 Then
+        If TexGap < GapMin + 0.2 Or TexGap >= TexA Or TexGap >= TexB Then
+            MsgBox "Для панелей и камня зазор должен быть не менее GapMin + 0,2 мм и меньше размеров A и B.", vbExclamation
+            Exit Function
+        End If
+    End If
     If Seed <= 0 Then Seed = 101
     ValidateSettings = True
+End Function
+
+Public Function SectionTypeAt(ByVal position As Long, ByVal spec As String) As Long
+    Dim values As Variant
+    SectionTypeAt = (position - 1) Mod 5
+    If Len(Trim$(spec)) = 0 Then Exit Function
+    values = Split(spec, ";")
+    If position - 1 <= UBound(values) Then
+        If IsNumeric(Trim$(values(position - 1))) Then SectionTypeAt = CLng(Trim$(values(position - 1)))
+    End If
+End Function
+
+Public Function EntranceAt(ByVal position As Long, ByVal count As Long, _
+                           ByVal automaticCount As Long, ByVal spec As String) As Boolean
+    Dim values As Variant, v As Variant
+    If Len(Trim$(spec)) = 0 Then
+        EntranceAt = (position > count - automaticCount)
+        Exit Function
+    End If
+    values = Split(spec, ";")
+    For Each v In values
+        If IsNumeric(Trim$(CStr(v))) Then
+            If CDbl(Trim$(CStr(v))) = position Then EntranceAt = True: Exit Function
+        End If
+    Next v
+End Function
+
+Private Function ValidateSectionLists() As Boolean
+    Dim values As Variant, v As Variant, n As Double, i As Long
+    Dim seen(1 To 12) As Boolean
+    ValidateSectionLists = False
+    If Len(Trim$(SectionTypes)) > 0 Then
+        values = Split(SectionTypes, ";")
+        If UBound(values) + 1 <> NSections Then
+            MsgBox "Укажите тип для каждой секции, разделяя номера точкой с запятой.", vbExclamation
+            Exit Function
+        End If
+        For Each v In values
+            If Not IsNumeric(Trim$(CStr(v))) Then GoTo badTypes
+            n = CDbl(Trim$(CStr(v)))
+            If n <> Int(n) Or n < 0 Or n > 4 Then GoTo badTypes
+        Next v
+    End If
+    If Len(Trim$(EntranceSections)) > 0 Then
+        values = Split(EntranceSections, ";")
+        For Each v In values
+            If Not IsNumeric(Trim$(CStr(v))) Then GoTo badEntrances
+            n = CDbl(Trim$(CStr(v)))
+            If n <> Int(n) Or n < 1 Or n > NSections Then GoTo badEntrances
+            i = CLng(n)
+            If seen(i) Then GoTo badEntrances
+            seen(i) = True
+        Next v
+        NEntrances = UBound(values) + 1
+    End If
+    ValidateSectionLists = True
+    Exit Function
+badTypes:
+    MsgBox "Тип секции должен быть целым числом от 0 до 4.", vbExclamation
+    Exit Function
+badEntrances:
+    MsgBox "Укажите разные номера секций подъездов от 1 до числа секций.", vbExclamation
 End Function
 
 ' запасной пошаговый мастер (если форма недоступна)
@@ -160,6 +234,7 @@ Private Sub WizardInputBoxes()
     If UBound(parts) >= 3 Then
         JitterOn = (NumL(parts(0), 1) = 1)
         DetailsOn = (NumL(parts(1), 1) = 1)
+        ACOn = DetailsOn: PipesOn = DetailsOn: CracksOn = DetailsOn: BalconiesOn = DetailsOn
         CanopyOn = (NumL(parts(2), 1) = 1)
         Seed = NumL(parts(3), Seed)
     End If

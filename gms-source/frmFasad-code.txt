@@ -2,12 +2,13 @@ Option Explicit
 
 Private mWatchers As Collection
 Private mPreviewBusy As Boolean
+Private mApplying As Boolean
 
 ' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
 Private Sub UserForm_Initialize()
     Me.Caption = "Генератор фасада панельного дома"
     Me.Width = 760
-    Me.Height = 500
+    Me.Height = 565
     BuildControls Me
 
     With Me.Controls("cmbRoof")
@@ -29,13 +30,18 @@ Private Sub UserForm_Initialize()
         .AddItem "0 - Кирпич"
         .AddItem "1 - Доски"
         .AddItem "2 - Облицовочные панели"
+        .AddItem "3 - Каменные блоки"
         .ListIndex = TextureType
     End With
     Me.Controls("chkFoundation").Value = FoundationOn
     Me.Controls("chkRandom").Value = RandomStyles
     Me.Controls("chkJitter").Value = JitterOn
-    Me.Controls("chkDetails").Value = DetailsOn
+    Me.Controls("chkAC").Value = ACOn
+    Me.Controls("chkPipes").Value = PipesOn
+    Me.Controls("chkCracks").Value = CracksOn
+    Me.Controls("chkBalconies").Value = BalconiesOn
     Me.Controls("chkCanopy").Value = CanopyOn
+    SetupTemplates
     SetupPreviewEvents
     RefreshPreview
 End Sub
@@ -49,6 +55,8 @@ Private Sub btnOk_Click()
     NPlinth = NumL(Me.Controls("txtPlinth").Text, NPlinth)
     NSections = NumL(Me.Controls("txtSections").Text, NSections)
     NEntrances = NumL(Me.Controls("txtEntrances").Text, NEntrances)
+    SectionTypes = Trim$(Me.Controls("txtSecTypes").Text)
+    EntranceSections = Trim$(Me.Controls("txtEntList").Text)
     FoundationOn = CBool(Me.Controls("chkFoundation").Value)
     FoundationH = Num(Me.Controls("txtFoundH").Text, FoundationH)
     RoofType = Me.Controls("cmbRoof").ListIndex
@@ -59,7 +67,11 @@ Private Sub btnOk_Click()
     TexB = Num(Me.Controls("txtTexB").Text, TexB)
     TexGap = Num(Me.Controls("txtTexGap").Text, TexGap)
     JitterOn = CBool(Me.Controls("chkJitter").Value)
-    DetailsOn = CBool(Me.Controls("chkDetails").Value)
+    ACOn = CBool(Me.Controls("chkAC").Value)
+    PipesOn = CBool(Me.Controls("chkPipes").Value)
+    CracksOn = CBool(Me.Controls("chkCracks").Value)
+    BalconiesOn = CBool(Me.Controls("chkBalconies").Value)
+    DetailsOn = ACOn Or PipesOn Or CracksOn
     CanopyOn = CBool(Me.Controls("chkCanopy").Value)
     Seed = NumL(Me.Controls("txtSeed").Text, Seed)
     If Not ValidateSettings Then Exit Sub
@@ -88,9 +100,10 @@ End Sub
 Private Sub SetupPreviewEvents()
     Dim names As Variant, name As Variant, watcher As clsFacadePreview
     names = Array("txtW", "txtH", "txtMargin", "txtGap", "txtFloors", "txtPlinth", _
-                  "txtSections", "txtEntrances", "chkFoundation", "txtFoundH", _
+                  "txtSections", "txtEntrances", "txtSecTypes", "txtEntList", "chkFoundation", "txtFoundH", _
                   "cmbRoof", "cmbWindow", "cmbTexture", "txtTexA", "txtTexB", _
-                  "txtTexGap", "chkRandom", "chkJitter", "chkDetails", "chkCanopy", "txtSeed")
+                  "txtTexGap", "chkRandom", "chkJitter", "chkAC", "chkPipes", "chkCracks", "chkBalconies", "chkCanopy", "txtSeed", _
+                  "cmbTemplate", "cmbCladding", "btnSaveTemplate")
     Set mWatchers = New Collection
     For Each name In names
         Set watcher = New clsFacadePreview
@@ -111,7 +124,7 @@ End Sub
 ' Схема построена из элементов самой формы, а не из фигур CorelDRAW.
 ' Она намеренно упрощена и не является технологической проверкой макета.
 Public Sub RefreshPreview()
-    If mPreviewBusy Then Exit Sub
+    If mPreviewBusy Or mApplying Then Exit Sub
     mPreviewBusy = True
     On Error GoTo failed
 
@@ -141,6 +154,7 @@ Public Sub RefreshPreview()
     Select Case Me.Controls("cmbTexture").ListIndex
         Case 0: wallColor = RGB(224, 193, 170)
         Case 1: wallColor = RGB(218, 202, 170)
+        Case 3: wallColor = RGB(194, 186, 172)
         Case Else: wallColor = RGB(210, 215, 219)
     End Select
     PreviewRect box, itemNo, px, py, pw, ph, RGB(250, 249, 245), True
@@ -170,7 +184,7 @@ Public Sub RefreshPreview()
     For lineNo = 1 To 8
         lineY = wallTop + wallH * lineNo / 9
         PreviewRect box, itemNo, px + margin, lineY, wallW, 1, RGB(168, 157, 145), False
-        If texture = 0 Then
+        If texture = 0 Or texture = 3 Then
             For jointNo = 1 To 4
                 jointX = px + margin + wallW * (jointNo + 0.35 * (lineNo Mod 2)) / 5
                 PreviewRect box, itemNo, jointX, lineY, 1, wallH / 18, RGB(168, 157, 145), False
@@ -210,12 +224,16 @@ Public Sub RefreshPreview()
             pw - 2 * margin, cellH, RGB(200, 187, 170), True
         For col = 0 To showSections - 1
             xx = px + margin + col * cellW
-            isDoor = (row = 0 And col >= showSections - entrances)
+            isDoor = (row = 0 And EntranceAt(col + 1, sections, entrances, CStr(Me.Controls("txtEntList").Text)))
             If isDoor Then
                 PreviewRect box, itemNo, xx + cellW * 0.3, yy + cellH * 0.14, _
                             cellW * 0.4, cellH * 0.84, RGB(127, 97, 77), True
             Else
                 wi = cellW * 0.58: hi = cellH * 0.56
+                If CBool(Me.Controls("chkBalconies").Value) Then
+                    If SectionTypeAt(col + 1, CStr(Me.Controls("txtSecTypes").Text)) = 1 Or _
+                       SectionTypeAt(col + 1, CStr(Me.Controls("txtSecTypes").Text)) = 4 Then wi = cellW * 0.82
+                End If
                 PreviewRect box, itemNo, xx + (cellW - wi) / 2, yy + cellH * 0.2, _
                             wi, hi, RGB(207, 227, 242), True
                 sashes = style + 1: If sashes > 3 Then sashes = 2
@@ -264,4 +282,179 @@ Private Sub PreviewRect(ByVal box As Object, ByRef itemNo As Long, _
     item.Left = x: item.Top = y: item.Width = w: item.Height = h
     item.Caption = "": item.BackStyle = 1: item.BackColor = color
     If bordered Then item.BorderStyle = 1
+End Sub
+
+' Пресеты хранятся в профиле текущего пользователя Windows (SaveSetting).
+Private Function PresetFields() As Variant
+    PresetFields = Array("txtW", "txtH", "txtMargin", "txtGap", "txtFloors", "txtPlinth", _
+        "txtSections", "txtEntrances", "txtSecTypes", "txtEntList", "chkFoundation", "txtFoundH", _
+        "cmbRoof", "cmbWindow", "cmbTexture", "txtTexA", "txtTexB", "txtTexGap", _
+        "chkRandom", "chkJitter", "chkAC", "chkPipes", "chkCracks", "chkBalconies", "chkCanopy", "txtSeed")
+End Function
+
+Private Sub SetupTemplates()
+    Dim stored As Variant, i As Long
+    With Me.Controls("cmbTemplate")
+        .AddItem "Текущие настройки"
+        .AddItem "Панельный дом — 9 этажей"
+        .AddItem "Кирпичный дом — 5 этажей"
+        .AddItem "Современный дом — 12 этажей"
+        .AddItem "Деревянный дом — 3 этажа"
+        .AddItem "Дом с двумя подъездами — 7 этажей"
+        .AddItem "Малоэтажный дом — 2 этажа"
+        stored = GetAllSettings("FasadPanel", "Presets")
+        If Not IsEmpty(stored) Then
+            For i = LBound(stored, 1) To UBound(stored, 1)
+                .AddItem "Свой: " & stored(i, 0)
+            Next i
+        End If
+        .ListIndex = 0
+    End With
+    With Me.Controls("cmbCladding")
+        .AddItem "Выбрать пресет отделки"
+        .AddItem "Кирпич мелкий — 4 × 1,7 мм"
+        .AddItem "Кирпич крупный — 6 × 2,5 мм"
+        .AddItem "Доски узкие — 2 × 12 мм"
+        .AddItem "Доски широкие — 4 × 20 мм"
+        .AddItem "Мелкая плитка — 2 × 2 мм"
+        .AddItem "Панели — 8 × 5 мм"
+        .AddItem "Каменные блоки — 6 × 4 мм"
+        .AddItem "Крупный камень — 10 × 6 мм"
+        .ListIndex = 0
+    End With
+End Sub
+
+Public Sub CladdingSelected()
+    If mApplying Then Exit Sub
+    Dim idx As Long
+    idx = Me.Controls("cmbCladding").ListIndex
+    If idx < 1 Then Exit Sub
+    mApplying = True
+    Select Case idx
+        Case 1: SetCladding 0, "4", "1,7", "0,4"
+        Case 2: SetCladding 0, "6", "2,5", "0,4"
+        Case 3: SetCladding 1, "2", "12", "0,5"
+        Case 4: SetCladding 1, "4", "20", "0,5"
+        Case 5: SetCladding 2, "2", "2", "0,5"
+        Case 6: SetCladding 2, "8", "5", "0,5"
+        Case 7: SetCladding 3, "6", "4", "0,5"
+        Case 8: SetCladding 3, "10", "6", "0,5"
+    End Select
+    mApplying = False
+    RefreshPreview
+End Sub
+
+Private Sub SetCladding(ByVal kind As Long, ByVal a As String, ByVal b As String, ByVal gap As String)
+    Me.Controls("cmbTexture").ListIndex = kind
+    Me.Controls("txtTexA").Text = a
+    Me.Controls("txtTexB").Text = b
+    Me.Controls("txtTexGap").Text = gap
+End Sub
+
+Public Sub TemplateSelected()
+    If mApplying Then Exit Sub
+    Dim idx As Long, spec As String
+    idx = Me.Controls("cmbTemplate").ListIndex
+    If idx < 1 Then Exit Sub
+    mApplying = True
+    On Error GoTo failed
+    If idx > 6 Then
+        spec = GetSetting("FasadPanel", "Presets", Mid$(CStr(Me.Controls("cmbTemplate").Value), 7), "")
+        If Len(spec) = 0 Then Err.Raise vbObjectError + 200, , "Пресет не найден."
+        LoadPresetFields spec
+    Else
+        ' Каждая встроенная конфигурация задаёт полный исходный набор настроек.
+        Me.Controls("txtW").Text = "165": Me.Controls("txtH").Text = "320"
+        Me.Controls("txtMargin").Text = "4": Me.Controls("txtGap").Text = "0,25"
+        Me.Controls("chkFoundation").Value = True: Me.Controls("txtFoundH").Text = "12"
+        Me.Controls("cmbWindow").ListIndex = 1: Me.Controls("chkRandom").Value = True
+        Me.Controls("chkJitter").Value = True: Me.Controls("chkAC").Value = True
+        Me.Controls("chkPipes").Value = True: Me.Controls("chkCracks").Value = True
+        Me.Controls("chkBalconies").Value = True: Me.Controls("chkCanopy").Value = True
+        Me.Controls("txtSeed").Text = "101"
+        Me.Controls("txtSecTypes").Text = ""
+        Me.Controls("txtEntList").Text = ""
+        Me.Controls("txtEntrances").Text = "1"
+        Me.Controls("txtPlinth").Text = "1"
+        Me.Controls("cmbRoof").ListIndex = 0
+        Select Case idx
+            Case 1
+                Me.Controls("txtFloors").Text = "9": Me.Controls("txtSections").Text = "5"
+                SetCladding 0, "4", "1,7", "0,4"
+            Case 2
+                Me.Controls("txtFloors").Text = "5": Me.Controls("txtSections").Text = "4"
+                SetCladding 0, "6", "2,5", "0,4"
+            Case 3
+                Me.Controls("txtFloors").Text = "12": Me.Controls("txtSections").Text = "6"
+                SetCladding 2, "8", "5", "0,5"
+            Case 4
+                Me.Controls("txtFloors").Text = "3": Me.Controls("txtPlinth").Text = "0"
+                Me.Controls("txtSections").Text = "4": Me.Controls("cmbRoof").ListIndex = 1
+                SetCladding 1, "2", "12", "0,5"
+            Case 5
+                Me.Controls("txtFloors").Text = "7": Me.Controls("txtSections").Text = "5"
+                Me.Controls("txtEntrances").Text = "2": Me.Controls("txtEntList").Text = "2;5"
+                SetCladding 0, "4", "1,7", "0,4"
+            Case 6
+                Me.Controls("txtFloors").Text = "2": Me.Controls("txtPlinth").Text = "0"
+                Me.Controls("txtSections").Text = "3": Me.Controls("cmbRoof").ListIndex = 2
+                SetCladding 2, "8", "5", "0,5"
+        End Select
+    End If
+    mApplying = False
+    RefreshPreview
+    Exit Sub
+failed:
+    mApplying = False
+    MsgBox "Не удалось загрузить пресет: " & Err.Description, vbExclamation
+End Sub
+
+Public Sub SaveCurrentTemplate()
+    Dim name As String, fields As Variant, values() As String, i As Long, c As Object, existing As String
+    name = Trim$(InputBox("Название пресета:", "Сохранить пресет"))
+    If Len(name) = 0 Then Exit Sub
+    If Len(name) > 60 Or InStr(name, "\") > 0 Then
+        MsgBox "Имя не должно содержать обратную косую черту и быть длиннее 60 символов.", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo failed
+    existing = GetSetting("FasadPanel", "Presets", name, "")
+    If Len(existing) > 0 Then
+        If MsgBox("Перезаписать пресет «" & name & "»?", vbYesNo + vbQuestion) <> vbYes Then Exit Sub
+    End If
+    fields = PresetFields()
+    ReDim values(0 To UBound(fields))
+    For i = 0 To UBound(fields)
+        Set c = Me.Controls(CStr(fields(i)))
+        Select Case TypeName(c)
+            Case "TextBox": values(i) = Replace(CStr(c.Text), vbTab, " ")
+            Case "ComboBox": values(i) = CStr(c.ListIndex)
+            Case "CheckBox": values(i) = CStr(CBool(c.Value))
+        End Select
+    Next i
+    SaveSetting "FasadPanel", "Presets", name, Join(values, vbTab)
+    Dim combo As Object, j As Long, found As Boolean
+    Set combo = Me.Controls("cmbTemplate")
+    For j = 7 To combo.ListCount - 1
+        If CStr(combo.List(j)) = "Свой: " & name Then found = True: Exit For
+    Next j
+    If Not found Then combo.AddItem "Свой: " & name
+    MsgBox "Пресет сохранён в профиле текущего пользователя Windows.", vbInformation
+    Exit Sub
+failed:
+    MsgBox "Не удалось сохранить пресет: " & Err.Description, vbExclamation
+End Sub
+
+Private Sub LoadPresetFields(ByVal spec As String)
+    Dim fields As Variant, values As Variant, i As Long, c As Object
+    fields = PresetFields(): values = Split(spec, vbTab)
+    If UBound(values) <> UBound(fields) Then Err.Raise vbObjectError + 201, , "Неверный формат пресета."
+    For i = 0 To UBound(fields)
+        Set c = Me.Controls(CStr(fields(i)))
+        Select Case TypeName(c)
+            Case "TextBox": c.Text = CStr(values(i))
+            Case "ComboBox": c.ListIndex = CLng(values(i))
+            Case "CheckBox": c.Value = CBool(values(i))
+        End Select
+    Next i
 End Sub
