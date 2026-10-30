@@ -54,10 +54,17 @@ Public Sub BuildControls(d As Object)
     AddLabel d, "lblEntrances", "Подъезды:", 205, y + 3, 70
     AddText d, "txtEntrances", 280, y, 60, CStr(NEntrances): y = y + 26
 
-    AddLabel d, "lblSecTypes", "Типы секций:", 10, y + 3, 100
-    AddText d, "txtSecTypes", 115, y, 257, SectionTypes: y = y + 26
-    AddLabel d, "lblEntList", "Подъезды №:", 10, y + 3, 100
-    AddText d, "txtEntList", 115, y, 257, EntranceSections: y = y + 26
+    ' Списки редактируют одну секцию за раз; скрытые поля хранят совместимый формат пресета.
+    AddLabel d, "lblSecTypes", "Секция:", 10, y + 3, 55
+    AddCombo d, "cmbSectionNo", 70, y, 65
+    AddLabel d, "lblTypeChoice", "Тип:", 145, y + 3, 30
+    AddCombo d, "cmbSectionType", 180, y, 192: y = y + 26
+    AddLabel d, "lblEntList", "Подъезд:", 10, y + 3, 100
+    AddCombo d, "cmbEntrance", 115, y, 257: y = y + 26
+    AddText d, "txtSecTypes", 0, 0, 1, SectionTypes
+    AddText d, "txtEntList", 0, 0, 1, EntranceSections
+    d.Controls("txtSecTypes").Visible = False
+    d.Controls("txtEntList").Visible = False
 
     AddCheck d, "chkFoundation", "Фундамент", 10, y + 2, 90
     AddLabel d, "lblFoundH", "высота, мм:", 120, y + 3, 80
@@ -85,8 +92,12 @@ Public Sub BuildControls(d As Object)
     AddCheck d, "chkPipes", "Трубы", 135, y + 2, 70
     AddCheck d, "chkCracks", "Трещины", 210, y + 2, 90: y = y + 24
     AddCheck d, "chkCanopy", "Козырёк подъезда", 10, y + 2, 150
-    AddLabel d, "lblSeed", "Seed (рисунок):", 205, y + 3, 110
-    AddText d, "txtSeed", 320, y, 60, CStr(Seed): y = y + 32
+    AddLabel d, "lblSeed", "Вариант рисунка:", 205, y + 3, 110
+    AddCombo d, "cmbSeed", 320, y, 72
+    d.Controls("cmbSeed").Style = 0
+    AddText d, "txtSeed", 0, 0, 1, CStr(Seed)
+    d.Controls("txtSeed").Visible = False
+    y = y + 32
 
     ' Подсказки доступны при наведении мыши на поля и списки.
     SetTip d, "txtW", "Ширина панели в мм; стандарт светильника — 165."
@@ -102,19 +113,20 @@ Public Sub BuildControls(d As Object)
     SetTip d, "cmbRoof", "Вид крыши; схема справа показывает её условно."
     SetTip d, "cmbWindow", "Тип окон; при смешивании стилей тип может различаться по этажам."
     SetTip d, "cmbTexture", "Тип отделки; размеры элементов задаются полями A и B."
-    SetTip d, "txtTexA", "Размер A в мм: длина кирпича, ширина доски или ширина панели."
-    SetTip d, "txtTexB", "Размер B в мм: высота кирпича, длина доски или высота панели."
-    SetTip d, "txtTexGap", "Зазор облицовочных панелей в миллиметрах."
+    SetTip d, "txtTexA", "Размер A: длина кирпича, ширина доски/панели/камня; у волн — шаг линий."
+    SetTip d, "txtTexB", "Размер B: высота кирпича/панели/камня или длина доски; на волны не влияет."
+    SetTip d, "txtTexGap", "Ширина шва для панелей и камня; для остальных фактур не используется."
     SetTip d, "chkRandom", "Смешивать стили окон; на схеме это показано условно."
     SetTip d, "chkJitter", "Небольшая неровность векторных линий."
-    SetTip d, "txtSecTypes", "Пусто: автоматически. Или тип для каждой секции через ; — 0 окно, 1 балкон, 2 парные окна, 3 остекление, 4 лоджия."
-    SetTip d, "txtEntList", "Пусто: справа по количеству. Иначе номера секций через ;, например 1;3."
+    SetTip d, "cmbSectionNo", "Выберите номер секции слева направо."
+    SetTip d, "cmbSectionType", "Выберите тип для выбранной секции."
+    SetTip d, "cmbEntrance", "Установите наличие подъезда на нижнем этаже выбранной секции."
     SetTip d, "chkAC", "Блоки только под окнами и при достаточном свободном месте."
     SetTip d, "chkPipes", "Включить водосточные трубы."
     SetTip d, "chkCracks", "Включить трещины."
     SetTip d, "chkBalconies", "Балконные секции; при отключении заменяются окнами."
     SetTip d, "chkCanopy", "Добавить козырёк подъезда."
-    SetTip d, "txtSeed", "Число для воспроизводимого расположения деталей."
+    SetTip d, "cmbSeed", "Выберите число или введите своё: одинаковые числа дают одинаковый рисунок."
     Dim preview As Object
     Set preview = d.Controls.Add("Forms.Frame.1", "fraPreview")
     preview.Caption = "Предпросмотр (схематично)"

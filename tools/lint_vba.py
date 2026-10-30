@@ -37,17 +37,17 @@ def logical_lines(text):
 fail = False
 # Вызовы без аргументов на отдельной строке должны ссылаться на процедуру
 # проекта. Это не полноценный компилятор VBA и не проверяет вызовы с аргументами.
-modules = [fn for fn in sorted(os.listdir(SRC)) if fn.endswith('.bas')]
+modules = [fn for fn in sorted(os.listdir(SRC)) if fn.endswith(('.bas', '.cls')) or fn == 'frmFasad-code.txt']
 procedures = set()
 for fn in modules:
     text = open(os.path.join(SRC, fn), encoding='utf-8').read()
     procedures.update(name.lower() for name in re.findall(
         r'^\s*(?:(?:Private|Public|Friend)\s+)?(?:Sub|Function)\s+(\w+)',
         text, re.I | re.M))
-standalone_keywords = {'else', 'loop', 'wend', 'next', 'do', 'stop', 'return', 'doevents'}
+standalone_keywords = {'else', 'loop', 'wend', 'next', 'do', 'stop', 'return', 'doevents', 'begin', 'end'}
 
 for fn in sorted(os.listdir(SRC)):
-    if not fn.endswith(".bas"):
+    if fn not in modules:
         continue
     text = open(os.path.join(SRC, fn), encoding="utf-8").read()
     lines = logical_lines(text)

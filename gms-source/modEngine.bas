@@ -637,8 +637,8 @@ Private Sub DrawTextureSection(si As Long, f As Long)
     Dim amp As Double: amp = 0.045
     Dim margin As Double: margin = GapMin + 0.3
 
-    If TextureType = 0 Then
-        ' кирпич ложковой перевязкой
+    If TextureType = 0 Or TextureType = 5 Then
+        ' Кирпич со сдвигом рядов либо ровные швы
         Dim rowH As Double: rowH = TexB
         Dim brickL As Double: brickL = TexA
         Dim row As Long: row = 0
@@ -646,7 +646,7 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         Do While y <= ybnd
             DrawHClip y, x0, x1, LC_KLADKA, margin, amp, JitterOn
             Dim stagger As Double
-            If row Mod 2 = 1 Then stagger = brickL / 2 Else stagger = 0
+            If TextureType = 0 And row Mod 2 = 1 Then stagger = brickL / 2 Else stagger = 0
             Dim x As Double
             x = CeilD((x0 - stagger) / brickL) * brickL + stagger
             Do While x <= x1
@@ -671,7 +671,30 @@ Private Sub DrawTextureSection(si As Long, f As Long)
             Loop
             y = y + boardW: row = row + 1
         Loop
-    ElseIf TextureType = 3 Then
+    ElseIf TextureType = 4 Then
+        ' Вертикальные доски со смещёнными поперечными стыками.
+        Dim col As Long
+        x = CeilD(x0 / TexA) * TexA
+        Do While x <= x1
+            DrawVClip x, ya, ybnd, LC_KLADKA, margin, amp, JitterOn
+            If col Mod 2 = 0 Then stagger = 0 Else stagger = TexB / 2
+            y = CeilD((ya - stagger) / TexB) * TexB + stagger
+            Do While y <= ybnd
+                DrawHClip y, x + 0.1, MinD(x + TexA - 0.1, x1), LC_KLADKA, margin, amp, JitterOn
+                y = y + TexB
+            Loop
+            x = x + TexA: col = col + 1
+        Loop
+    ElseIf TextureType = 6 Then
+        ' Условные волнистые древесные волокна, с ограниченной амплитудой.
+        Dim waveAmp As Double
+        waveAmp = MinD(0.12, MaxD(0, (TexA - GapMin) / 2 - 0.03))
+        y = CeilD(ya / TexA) * TexA
+        Do While y <= ybnd
+            DrawHClip y, x0, x1, LC_KLADKA, margin, waveAmp, True
+            y = y + TexA
+        Loop
+    ElseIf TextureType = 3 Or TextureType = 7 Then
         DrawStoneTexture x0, x1, ya, ybnd, margin
     Else
         ' облицовочные панели: сетка прямоугольников с зазором TexGap
@@ -720,8 +743,13 @@ End Sub
 
 Private Sub DrawStone(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double)
     Dim pts(0 To 7, 0 To 1) As Double, rx As Double, ry As Double
-    rx = (x2 - x1) * RndRange(0.12, 0.28)
-    ry = (y2 - y1) * RndRange(0.12, 0.28)
+    If TextureType = 7 Then
+        rx = (x2 - x1) * RndRange(0.33, 0.45)
+        ry = (y2 - y1) * RndRange(0.33, 0.45)
+    Else
+        rx = (x2 - x1) * RndRange(0.12, 0.28)
+        ry = (y2 - y1) * RndRange(0.12, 0.28)
+    End If
     pts(0, 0) = x1 + rx: pts(0, 1) = y1
     pts(1, 0) = x2 - rx: pts(1, 1) = y1
     pts(2, 0) = x2: pts(2, 1) = y1 + ry

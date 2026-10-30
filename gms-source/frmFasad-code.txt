@@ -6,7 +6,7 @@ Private mApplying As Boolean
 
 ' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
 Private Sub UserForm_Initialize()
-    Me.Caption = "Генератор фасада - v0.1.0"
+    Me.Caption = "Генератор фасада - v0.2.0"
     Me.Width = 760
     Me.Height = 565
     BuildControls Me
@@ -31,6 +31,10 @@ Private Sub UserForm_Initialize()
         .AddItem "1 - Доски"
         .AddItem "2 - Облицовочные панели"
         .AddItem "3 - Каменные блоки"
+        .AddItem "4 - Вертикальные доски"
+        .AddItem "5 - Кладка прямыми рядами"
+        .AddItem "6 - Древесные волны"
+        .AddItem "7 - Округлая галька"
         .ListIndex = TextureType
     End With
     Me.Controls("chkFoundation").Value = FoundationOn
@@ -42,11 +46,13 @@ Private Sub UserForm_Initialize()
     Me.Controls("chkBalconies").Value = BalconiesOn
     Me.Controls("chkCanopy").Value = CanopyOn
     SetupTemplates
+    SetupSectionSelectors
     SetupPreviewEvents
     RefreshPreview
 End Sub
 
 Private Sub btnOk_Click()
+    Dim seedValue As Double
     PanelW = Num(Me.Controls("txtW").Text, PanelW)
     PanelH = Num(Me.Controls("txtH").Text, PanelH)
     MarginMm = Num(Me.Controls("txtMargin").Text, MarginMm)
@@ -73,7 +79,16 @@ Private Sub btnOk_Click()
     BalconiesOn = CBool(Me.Controls("chkBalconies").Value)
     DetailsOn = ACOn Or PipesOn Or CracksOn
     CanopyOn = CBool(Me.Controls("chkCanopy").Value)
-    Seed = NumL(Me.Controls("txtSeed").Text, Seed)
+    If Not IsNumeric(Me.Controls("txtSeed").Text) Then
+        MsgBox "Вариант рисунка должен быть целым числом от 1 до 2147483647.", vbExclamation
+        Exit Sub
+    End If
+    seedValue = CDbl(Me.Controls("txtSeed").Text)
+    If seedValue < 1 Or seedValue > 2147483647# Or seedValue <> Int(seedValue) Then
+        MsgBox "Вариант рисунка должен быть целым числом от 1 до 2147483647.", vbExclamation
+        Exit Sub
+    End If
+    Seed = CLng(seedValue)
     If Not ValidateSettings Then Exit Sub
     FormCancelled = False
     StopPreviewEvents
@@ -103,7 +118,7 @@ Private Sub SetupPreviewEvents()
                   "txtSections", "txtEntrances", "txtSecTypes", "txtEntList", "chkFoundation", "txtFoundH", _
                   "cmbRoof", "cmbWindow", "cmbTexture", "txtTexA", "txtTexB", _
                   "txtTexGap", "chkRandom", "chkJitter", "chkAC", "chkPipes", "chkCracks", "chkBalconies", "chkCanopy", "txtSeed", _
-                  "cmbTemplate", "cmbCladding", "btnSaveTemplate")
+                  "cmbTemplate", "cmbCladding", "btnSaveTemplate", "cmbSectionNo", "cmbSectionType", "cmbEntrance", "cmbSeed")
     Set mWatchers = New Collection
     For Each name In names
         Set watcher = New clsFacadePreview
@@ -153,8 +168,9 @@ Public Sub RefreshPreview()
     Dim itemNo As Long, wallColor As Long
     Select Case Me.Controls("cmbTexture").ListIndex
         Case 0: wallColor = RGB(224, 193, 170)
-        Case 1: wallColor = RGB(218, 202, 170)
-        Case 3: wallColor = RGB(194, 186, 172)
+        Case 1, 4, 6: wallColor = RGB(218, 202, 170)
+        Case 3, 7: wallColor = RGB(194, 186, 172)
+        Case 5: wallColor = RGB(224, 193, 170)
         Case Else: wallColor = RGB(210, 215, 219)
     End Select
     PreviewRect box, itemNo, px, py, pw, ph, RGB(250, 249, 245), True
@@ -176,26 +192,76 @@ Public Sub RefreshPreview()
     cellW = (pw - 2 * margin) / showSections
     PreviewRect box, itemNo, px + margin, wallTop, pw - 2 * margin, _
                 wallBottom - wallTop, wallColor, True
-    ' Условные линии отделки: без имитации точного шага и лазерного зазора.
+    ' Плотность схемы зависит от A/B, но ограничена для скорости формы.
     Dim texture As Long, lineNo As Long, jointNo As Long
     Dim lineY As Double, jointX As Double, wallW As Double, wallH As Double
+    Dim previewA As Double, previewB As Double, rows As Long, cols As Long
+    Dim rowStep As Double, colStep As Double, shift As Double
     texture = Me.Controls("cmbTexture").ListIndex
     wallW = pw - 2 * margin: wallH = wallBottom - wallTop
-    For lineNo = 1 To 8
-        lineY = wallTop + wallH * lineNo / 9
-        PreviewRect box, itemNo, px + margin, lineY, wallW, 1, RGB(168, 157, 145), False
-        If texture = 0 Or texture = 3 Then
-            For jointNo = 1 To 4
-                jointX = px + margin + wallW * (jointNo + 0.35 * (lineNo Mod 2)) / 5
-                PreviewRect box, itemNo, jointX, lineY, 1, wallH / 18, RGB(168, 157, 145), False
+    previewA = PreviewNumber("txtTexA", 4, 0.5, 2000)
+    previewB = PreviewNumber("txtTexB", 2, 0.5, 2000)
+    If texture = 1 Or texture = 6 Then
+        rows = CLng(wallH / MaxD(1, previewA * previewScale))
+        cols = CLng(wallW / MaxD(1, previewB * previewScale))
+    Else
+        rows = CLng(wallH / MaxD(1, previewB * previewScale))
+        cols = CLng(wallW / MaxD(1, previewA * previewScale))
+    End If
+    If rows < 2 Then rows = 2
+    If rows > 12 Then rows = 12
+    If cols < 2 Then cols = 2
+    If cols > 6 Then cols = 6
+    rowStep = wallH / rows: colStep = wallW / cols
+    If texture = 3 Or texture = 7 Then
+        ' Камень и галька обозначены отдельными блоками в пределах сетки.
+        For lineNo = 0 To rows - 1
+            For jointNo = 0 To cols - 1
+                shift = 0
+                If lineNo Mod 2 = 1 Then shift = colStep * 0.18
+                jointX = px + margin + jointNo * colStep + shift
+                If jointX + colStep * 0.7 <= px + margin + wallW Then
+                    PreviewRect box, itemNo, jointX + 1, wallTop + lineNo * rowStep + 1, _
+                                colStep * 0.7, rowStep * 0.7, RGB(207, 199, 183), True
+                End If
             Next jointNo
-        End If
-    Next lineNo
-    If texture = 2 Then
-        For jointNo = 1 To 4
-            jointX = px + margin + wallW * jointNo / 5
-            PreviewRect box, itemNo, jointX, wallTop, 1, wallH, RGB(168, 157, 145), False
+        Next lineNo
+    ElseIf texture = 4 Then
+        For jointNo = 1 To cols - 1
+            jointX = px + margin + colStep * jointNo
+            PreviewRect box, itemNo, jointX, wallTop, 1, wallH, RGB(140, 124, 105), False
         Next jointNo
+        For lineNo = 1 To rows - 1
+            lineY = wallTop + lineNo * rowStep
+            For jointNo = 0 To cols - 1
+                shift = 0: If jointNo Mod 2 = 1 Then shift = rowStep * 0.4
+                If lineY + shift < wallBottom Then PreviewRect box, itemNo, px + margin + jointNo * colStep, _
+                    lineY + shift, colStep, 1, RGB(140, 124, 105), False
+            Next jointNo
+        Next lineNo
+    Else
+        For lineNo = 1 To rows - 1
+            lineY = wallTop + rowStep * lineNo
+            If texture = 6 Then
+                ' Волна показана ступенчато: это не итоговые векторы.
+                For jointNo = 0 To cols - 1
+                    shift = 0: If jointNo Mod 2 = 1 Then shift = 2
+                    PreviewRect box, itemNo, px + margin + jointNo * colStep, _
+                                lineY + shift, colStep, 1, RGB(140, 124, 105), False
+                Next jointNo
+            Else
+                PreviewRect box, itemNo, px + margin, lineY, wallW, 1, RGB(168, 157, 145), False
+                If texture = 0 Or texture = 1 Or texture = 2 Or texture = 5 Then
+                    For jointNo = 1 To cols - 1
+                        shift = 0
+                        If (texture = 0 Or texture = 1) And lineNo Mod 2 = 1 Then shift = colStep / 2
+                        jointX = px + margin + jointNo * colStep + shift
+                        If jointX < px + margin + wallW Then PreviewRect box, itemNo, jointX, lineY, _
+                            1, rowStep, RGB(168, 157, 145), False
+                    Next jointNo
+                End If
+            End If
+        Next lineNo
     End If
     If fh > 0 Then PreviewRect box, itemNo, px + margin, wallBottom, pw - 2 * margin, fh, RGB(145, 132, 115), True
     If rh > 0 Then
@@ -217,6 +283,8 @@ Public Sub RefreshPreview()
 
     Dim row As Long, col As Long, xx As Double, yy As Double, style As Long
     Dim wi As Double, hi As Double, k As Long, sashes As Long, isDoor As Boolean
+    Dim previewSeed As Long, sectionKind As Long
+    previewSeed = CLng(PreviewNumber("txtSeed", 101, 1, 2147483000#))
     style = Me.Controls("cmbWindow").ListIndex
     For row = 0 To showFloors - 1
         yy = wallBottom - (row + 1) * cellH
@@ -229,6 +297,11 @@ Public Sub RefreshPreview()
                 PreviewRect box, itemNo, xx + cellW * 0.3, yy + cellH * 0.14, _
                             cellW * 0.4, cellH * 0.84, RGB(127, 97, 77), True
             Else
+                style = Me.Controls("cmbWindow").ListIndex
+                If CBool(Me.Controls("chkRandom").Value) Then
+                    style = (row * 7 + (col + 1) * 3 + (previewSeed Mod 4)) Mod 4
+                End If
+                sectionKind = SectionTypeAt(col + 1, CStr(Me.Controls("txtSecTypes").Text))
                 wi = cellW * 0.58: hi = cellH * 0.56
                 If CBool(Me.Controls("chkBalconies").Value) Then
                     If SectionTypeAt(col + 1, CStr(Me.Controls("txtSecTypes").Text)) = 1 Or _
@@ -244,9 +317,22 @@ Public Sub RefreshPreview()
                 Next k
                 If style = 3 Then PreviewRect box, itemNo, xx + (cellW - wi) / 2, _
                     yy + cellH * 0.2 + hi * 0.3, wi, 1, RGB(80, 95, 108), False
+                If CBool(Me.Controls("chkAC").Value) And sectionKind = 2 And row > 0 Then
+                    If (row + col + previewSeed Mod 3) Mod 3 = 0 Then
+                        PreviewRect box, itemNo, xx + cellW * 0.35, yy + cellH * 0.82, _
+                                    cellW * 0.18, cellH * 0.08, RGB(181, 105, 135), True
+                    End If
+                End If
             End If
         Next col
     Next row
+    If CBool(Me.Controls("chkPipes").Value) And showSections > 1 Then
+        PreviewRect box, itemNo, px + margin + cellW, wallTop, 2, wallH, RGB(65, 145, 150), False
+    End If
+    If CBool(Me.Controls("chkCracks").Value) Then
+        PreviewRect box, itemNo, px + margin + wallW * 0.08, wallTop + wallH * 0.4, _
+                    1, MaxD(2, cellH * 0.16), RGB(116, 92, 81), False
+    End If
     Me.Controls("lblPreviewInfo").Caption = "Схема: " & CStr(floors + plinth) & " этажей, " & _
         CStr(sections) & " секций; подъезды — снизу." & vbCrLf & _
         "Фактура A×B: " & Me.Controls("txtTexA").Text & " × " & Me.Controls("txtTexB").Text & _
@@ -320,6 +406,10 @@ Private Sub SetupTemplates()
         .AddItem "Панели — 8 × 5 мм"
         .AddItem "Каменные блоки — 6 × 4 мм"
         .AddItem "Крупный камень — 10 × 6 мм"
+        .AddItem "Вертикальные доски — 3 × 15 мм"
+        .AddItem "Прямая кладка — 5 × 2 мм"
+        .AddItem "Древесные волны — шаг 2 мм"
+        .AddItem "Округлая галька — 4 × 3 мм"
         .ListIndex = 0
     End With
 End Sub
@@ -339,6 +429,10 @@ Public Sub CladdingSelected()
         Case 6: SetCladding 2, "8", "5", "0,5"
         Case 7: SetCladding 3, "6", "4", "0,5"
         Case 8: SetCladding 3, "10", "6", "0,5"
+        Case 9: SetCladding 4, "3", "15", "0,5"
+        Case 10: SetCladding 5, "5", "2", "0,5"
+        Case 11: SetCladding 6, "2", "12", "0,5"
+        Case 12: SetCladding 7, "4", "3", "0,5"
     End Select
     mApplying = False
     RefreshPreview
@@ -402,6 +496,7 @@ Public Sub TemplateSelected()
         End Select
     End If
     mApplying = False
+    SetupSectionSelectors
     RefreshPreview
     Exit Sub
 failed:
@@ -457,4 +552,153 @@ Private Sub LoadPresetFields(ByVal spec As String)
             Case "CheckBox": c.Value = CBool(values(i))
         End Select
     Next i
+End Sub
+
+Private Sub SetupSectionSelectors()
+    Dim previous As Long, i As Long, count As Long
+    On Error GoTo failed
+    previous = Me.Controls("cmbSectionNo").ListIndex
+    mApplying = True
+    With Me.Controls("cmbSectionType")
+        If .ListCount = 0 Then
+            .AddItem "Окна": .AddItem "Балкон": .AddItem "Парные окна"
+            .AddItem "Остекление": .AddItem "Лоджия"
+        End If
+    End With
+    With Me.Controls("cmbEntrance")
+        If .ListCount = 0 Then .AddItem "Нет": .AddItem "Есть на нижнем этаже"
+    End With
+    With Me.Controls("cmbSeed")
+        If .ListCount = 0 Then
+            .AddItem "101": .AddItem "202": .AddItem "303": .AddItem "404": .AddItem "505"
+        End If
+        .Text = CStr(Me.Controls("txtSeed").Text)
+    End With
+    count = CLng(PreviewNumber("txtSections", 5, 1, 12))
+    With Me.Controls("cmbSectionNo")
+        .Clear
+        For i = 1 To count
+            .AddItem CStr(i)
+        Next i
+        If previous < 0 Or previous >= count Then previous = 0
+        .ListIndex = previous
+    End With
+    SyncSectionChoice
+    mApplying = False
+    Exit Sub
+failed:
+    mApplying = False
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+Private Sub SyncSectionChoice()
+    Dim pos As Long, count As Long, ec As Long, kind As Long
+    pos = Me.Controls("cmbSectionNo").ListIndex + 1
+    If pos < 1 Then Exit Sub
+    count = CLng(PreviewNumber("txtSections", 5, 1, 12))
+    ec = CLng(PreviewNumber("txtEntrances", 1, 0, count))
+    kind = SectionTypeAt(pos, CStr(Me.Controls("txtSecTypes").Text))
+    If kind < 0 Or kind > 4 Then kind = 0
+    Me.Controls("cmbSectionType").ListIndex = kind
+    If EntranceAt(pos, count, ec, CStr(Me.Controls("txtEntList").Text)) Then
+        Me.Controls("cmbEntrance").ListIndex = 1
+    Else
+        Me.Controls("cmbEntrance").ListIndex = 0
+    End If
+End Sub
+
+Public Sub InputChanged(ByVal controlName As String)
+    If mApplying Then Exit Sub
+    On Error GoTo failed
+    If controlName = "txtSections" Then
+        NormalizeSectionLists
+        SetupSectionSelectors
+    ElseIf controlName = "txtEntrances" Then
+        ' Изменение количества возвращает автоматическую раскладку справа налево.
+        mApplying = True
+        Me.Controls("txtEntList").Text = ""
+        SyncSectionChoice
+        mApplying = False
+    End If
+    RefreshPreview
+    Exit Sub
+failed:
+    mApplying = False
+    MsgBox "Не удалось обновить параметры секций: " & Err.Description, vbExclamation
+End Sub
+
+Private Sub NormalizeSectionLists()
+    Dim count As Long, i As Long, value As String, entries As String, number As Long
+    On Error GoTo failed
+    count = CLng(PreviewNumber("txtSections", 5, 1, 12))
+    mApplying = True
+    value = CStr(Me.Controls("txtSecTypes").Text)
+    If Len(Trim$(value)) > 0 Then
+        For i = 1 To count
+            If i > 1 Then entries = entries & ";"
+            entries = entries & CStr(SectionTypeAt(i, value))
+        Next i
+        Me.Controls("txtSecTypes").Text = entries
+    End If
+    value = CStr(Me.Controls("txtEntList").Text)
+    If Len(Trim$(value)) > 0 Then
+        entries = "": number = 0
+        For i = 1 To count
+            If EntranceAt(i, count, 0, value) Then
+                If number > 0 Then entries = entries & ";"
+                entries = entries & CStr(i): number = number + 1
+            End If
+        Next i
+        Me.Controls("txtEntList").Text = entries
+        Me.Controls("txtEntrances").Text = CStr(number)
+    End If
+    mApplying = False
+    Exit Sub
+failed:
+    mApplying = False
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Sub
+
+Public Sub SectionChoiceChanged(ByVal controlName As String)
+    If mApplying Then Exit Sub
+    Dim pos As Long, count As Long, i As Long, entries As String, number As Long
+    Dim hasDoor As Boolean, oldList As String, ec As Long, kind As Long
+    On Error GoTo failed
+    mApplying = True
+    count = CLng(PreviewNumber("txtSections", 5, 1, 12))
+    pos = Me.Controls("cmbSectionNo").ListIndex + 1
+    Select Case controlName
+        Case "cmbSectionNo"
+            SyncSectionChoice
+        Case "cmbSeed"
+            Me.Controls("txtSeed").Text = CStr(Me.Controls("cmbSeed").Text)
+        Case "cmbSectionType"
+            oldList = CStr(Me.Controls("txtSecTypes").Text)
+            For i = 1 To count
+                If i > 1 Then entries = entries & ";"
+                kind = SectionTypeAt(i, oldList)
+                If i = pos Then kind = Me.Controls("cmbSectionType").ListIndex
+                entries = entries & CStr(kind)
+            Next i
+            Me.Controls("txtSecTypes").Text = entries
+        Case "cmbEntrance"
+            oldList = CStr(Me.Controls("txtEntList").Text)
+            ec = CLng(PreviewNumber("txtEntrances", 1, 0, count))
+            For i = 1 To count
+                hasDoor = EntranceAt(i, count, ec, oldList)
+                If i = pos Then hasDoor = (Me.Controls("cmbEntrance").ListIndex = 1)
+                If hasDoor Then
+                    If number > 0 Then entries = entries & ";"
+                    entries = entries & CStr(i): number = number + 1
+                End If
+            Next i
+            Me.Controls("txtEntList").Text = entries
+            Me.Controls("txtEntrances").Text = CStr(number)
+    End Select
+    mApplying = False
+    RefreshPreview
+    Exit Sub
+failed:
+    mApplying = False
+    MsgBox "Не удалось изменить выбор секции: " & Err.Description, vbExclamation
 End Sub

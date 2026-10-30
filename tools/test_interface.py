@@ -61,6 +61,29 @@ class InterfaceChecks(unittest.TestCase):
         self.assertIn("SaveSetting \"FasadPanel\"", form)
         self.assertIn("LoadPresetFields spec", form)
 
+    def test_selectors_and_textures_are_wired(self):
+        form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
+        module = (SRC / "modFormRuntime.bas").read_text(encoding="utf-8")
+        cls = (SRC / "clsFacadePreview.cls").read_text(encoding="utf-8")
+        engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
+        main = (SRC / "modMain.bas").read_text(encoding="utf-8")
+        for name in ("cmbSectionNo", "cmbSectionType", "cmbEntrance", "cmbSeed"):
+            self.assertIn('"' + name + '"', module)
+            self.assertIn('"' + name + '"', form)
+            self.assertIn('"' + name + '"', cls)
+        for old in ("txtSecTypes", "txtEntList", "txtSeed"):
+            self.assertIn('"' + old + '"', form)
+        self.assertIn("mOwner.SectionChoiceChanged", cls)
+        self.assertIn("SetupSectionSelectors\n    RefreshPreview", form)
+        self.assertIn("SectionTypeAt(i, oldList)", form)
+        self.assertIn("EntranceAt(i, count, ec, oldList)", form)
+        self.assertIn("TextureType < 0 Or TextureType > 7", main)
+        for kind in ("4", "5", "6", "7"):
+            self.assertIn("TextureType = " + kind, engine)
+        self.assertIn('texture = Me.Controls("cmbTexture").ListIndex', form)
+        self.assertIn('PreviewNumber("txtTexA"', form)
+        self.assertIn('PreviewNumber("txtTexB"', form)
+
     def test_obstacle_checks_used_for_details(self):
         engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
         self.assertIn("If Not RectFree(x, y, x + w, y + h, GapMin + 0.3) Then Exit Sub", engine)

@@ -39,13 +39,16 @@ Public Sub Detach()
 End Sub
 
 Private Sub mText_Change()
-    mOwner.RefreshPreview
+    mOwner.InputChanged mText.Name
 End Sub
 Private Sub mCombo_Change()
     If mCombo.Name = "cmbTemplate" Then
         mOwner.TemplateSelected
     ElseIf mCombo.Name = "cmbCladding" Then
         mOwner.CladdingSelected
+    ElseIf mCombo.Name = "cmbSectionNo" Or mCombo.Name = "cmbSectionType" Or _
+           mCombo.Name = "cmbEntrance" Or mCombo.Name = "cmbSeed" Then
+        mOwner.SectionChoiceChanged mCombo.Name
     Else
         mOwner.RefreshPreview
     End If

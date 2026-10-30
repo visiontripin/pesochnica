@@ -100,7 +100,11 @@ Public Function ValidateSettings() As Boolean
     If GapMin < 0.1 Then GapMin = 0.1
     If TexA < GapMin + 0.2 Then TexA = GapMin + 0.2
     If TexB < GapMin + 0.2 Then TexB = GapMin + 0.2
-    If TextureType = 2 Or TextureType = 3 Then
+    If TextureType < 0 Or TextureType > 7 Then
+        MsgBox "Выберите допустимую фактуру отделки.", vbExclamation
+        Exit Function
+    End If
+    If TextureType = 2 Or TextureType = 3 Or TextureType = 7 Then
         If TexGap < GapMin + 0.2 Or TexGap >= TexA Or TexGap >= TexB Then
             MsgBox "Для панелей и камня зазор должен быть не менее GapMin + 0,2 мм и меньше размеров A и B.", vbExclamation
             Exit Function
