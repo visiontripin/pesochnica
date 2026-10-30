@@ -21,6 +21,17 @@ class InterfaceChecks(unittest.TestCase):
             self.assertRegex(form, r"(?im)^(?:Public |Private )Sub " + callback + r"\b")
         self.assertIn("As clsFacadePreview", form)
 
+    def test_version_and_reserved_preview_variable(self):
+        version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
+        form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
+        self.assertIn(f'Генератор фасада - v{version}', form)
+        # VBA Scale is a reserved statement, not a safe variable name.
+        self.assertNotRegex(form, r"(?im)\bDim\s+scale\s+As\b")
+        self.assertNotRegex(form, r"(?im)^\s*scale\s*=")
+        archive = ROOT / "output" / f"FasadPanel_VBA_import_v{version}.zip"
+        with zipfile.ZipFile(archive) as z:
+            self.assertEqual(z.read("VERSION.txt").decode("ascii").strip(), version)
+
     def test_preview_class_wired(self):
         cls = (SRC / "clsFacadePreview.cls").read_text(encoding="utf-8")
         for name in ("mText_Change", "mCombo_Change", "mCheck_Click"):

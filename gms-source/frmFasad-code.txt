@@ -6,7 +6,7 @@ Private mApplying As Boolean
 
 ' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
 Private Sub UserForm_Initialize()
-    Me.Caption = "Генератор фасада панельного дома"
+    Me.Caption = "Генератор фасада - v0.1.0"
     Me.Width = 760
     Me.Height = 565
     BuildControls Me
@@ -146,9 +146,9 @@ Public Sub RefreshPreview()
     showFloors = floors + plinth: If showFloors > 12 Then showFloors = 12
     showSections = sections: If showSections > 8 Then showSections = 8
 
-    Dim scale As Double, pw As Double, ph As Double, px As Double, py As Double
-    scale = 250 / w: If h * scale > 335 Then scale = 335 / h
-    pw = w * scale: ph = h * scale
+    Dim previewScale As Double, pw As Double, ph As Double, px As Double, py As Double
+    previewScale = 250 / w: If h * previewScale > 335 Then previewScale = 335 / h
+    pw = w * previewScale: ph = h * previewScale
     px = (270 - pw) / 2 + 4: py = 20 + (340 - ph) / 2
     Dim itemNo As Long, wallColor As Long
     Select Case Me.Controls("cmbTexture").ListIndex
@@ -162,11 +162,11 @@ Public Sub RefreshPreview()
     roof = Me.Controls("cmbRoof").ListIndex
     If CBool(Me.Controls("chkFoundation").Value) Then
         found = PreviewNumber("txtFoundH", 12, 0, h / 3)
-        fh = found * scale
+        fh = found * previewScale
     End If
     If roof <> 3 Then rh = ph * 0.1
     Dim margin As Double
-    margin = PreviewNumber("txtMargin", 4, 1, w / 4) * scale
+    margin = PreviewNumber("txtMargin", 4, 1, w / 4) * previewScale
     If margin < 2 Then margin = 2
     Dim wallTop As Double, wallBottom As Double, cellH As Double, cellW As Double
     wallTop = py + margin + rh
