@@ -152,6 +152,13 @@ Public Sub BuildControls(d As Object)
     note.Left = 440: note.Top = 408: note.Width = 290: note.Height = 36
     note.Caption = "Схема не заменяет проверку линий перед гравировкой."
 
+    Dim swatch As Object
+    Set swatch = d.Controls.Add("Forms.Frame.1", "fraTexture")
+    swatch.Caption = "Фрагмент 20 x 20 мм"
+    swatch.Left = 740: swatch.Top = 10: swatch.Width = 118: swatch.Height = 110
+    AddLabel d, "lblTextureInfo", "Фрагмент условный", 740, 122, 118
+    d.Controls("lblTextureInfo").Height = 40
+
     AddLabel d, "lblTemplates", "Шаблон фасада:", 440, 449, 125
     AddCombo d, "cmbTemplate", 440, 468, 198
     Dim saveButton As Object

@@ -6,8 +6,8 @@ Private mApplying As Boolean
 
 ' Код формы frmFasad. Кнопки btnOk и btnCancel создаются в конструкторе VBA.
 Private Sub UserForm_Initialize()
-    Me.Caption = "Генератор фасада - v0.3.0"
-    Me.Width = 760
+    Me.Caption = "Генератор фасада - v0.4.0"
+    Me.Width = 880
     Me.Height = 565
     BuildControls Me
 
@@ -219,9 +219,9 @@ Public Sub RefreshPreview()
         cols = CLng(wallW / MaxD(1, previewA * previewScale))
     End If
     If rows < 2 Then rows = 2
-    If rows > 12 Then rows = 12
+    If rows > 24 Then rows = 24
     If cols < 2 Then cols = 2
-    If cols > 6 Then cols = 6
+    If cols > 12 Then cols = 12
     rowStep = wallH / rows: colStep = wallW / cols
     If texture = 3 Or texture = 7 Then
         ' Камень и галька обозначены отдельными блоками в пределах сетки.
@@ -309,8 +309,8 @@ Public Sub RefreshPreview()
             If isDoor Then
                 If Len(doorList) > 0 Then doorList = doorList & ", "
                 doorList = doorList & CStr(col + 1)
-                PreviewRect box, itemNo, xx + cellW * 0.3, yy + cellH * 0.14, _
-                            cellW * 0.4, cellH * 0.84, RGB(127, 97, 77), True
+                PreviewRect box, itemNo, xx + cellW * 0.12, yy + cellH * 0.28, _
+                            cellW * 0.42, cellH * 0.66, RGB(180, 204, 224), True
             Else
                 style = Me.Controls("cmbWindow").ListIndex
                 If CBool(Me.Controls("chkRandom").Value) Then
@@ -325,13 +325,20 @@ Public Sub RefreshPreview()
                     Case 2
                         PreviewWindow box, itemNo, xx + cellW * 0.08, yy + cellH * 0.17, wi, hi, style
                         PreviewWindow box, itemNo, xx + cellW * 0.56, yy + cellH * 0.17, wi, hi, (style + 1) Mod 4
-                    Case 1, 3, 4
+                    Case 1, 3
                         wi = cellW * 0.78: hi = cellH * 0.62
                         PreviewWindow box, itemNo, xx + (cellW - wi) / 2, yy + cellH * 0.18, wi, hi, 2
-                        If sectionKind = 1 Or sectionKind = 4 Then
-                            PreviewRect box, itemNo, xx + cellW * 0.08, yy + cellH * 0.73, _
-                                        cellW * 0.84, MaxD(1, cellH * 0.12), RGB(149, 165, 166), True
-                        End If
+                        PreviewRect box, itemNo, xx + cellW * 0.08, yy + cellH * 0.83, _
+                                    cellW * 0.84, MaxD(1, cellH * 0.1), RGB(149, 165, 166), True
+                    Case 4
+                        ' Как у движка: пустая лоджия, боковое окно и ограждение.
+                        PreviewRect box, itemNo, xx + 1, yy + 1, cellW - 2, cellH - 2, RGB(250, 249, 245), False
+                        PreviewWindow box, itemNo, xx + 2 * previewScale, yy + cellH * 0.24, _
+                                      cellW * 0.3, cellH * 0.56, 1
+                        PreviewRect box, itemNo, xx + cellW - 2.2 * previewScale, yy + cellH * 0.04, _
+                                    1, cellH * 0.9, RGB(44, 160, 44), False
+                        PreviewRect box, itemNo, xx + cellW * 0.05, yy + cellH * 0.87, _
+                                    cellW * 0.88, 1, RGB(44, 160, 44), False
                     Case Else
                         PreviewWindow box, itemNo, xx + (cellW - wi) / 2, yy + cellH * 0.17, wi, hi, style
                 End Select
@@ -352,7 +359,7 @@ Public Sub RefreshPreview()
                     1, MaxD(2, cellH * 0.16), RGB(116, 92, 81), False
     End If
     If Len(doorList) = 0 Then doorList = "нет"
-    Me.Controls("lblPreviewInfo").Caption = "Схема: " & CStr(floors + plinth) & " этажей, " & _
+    Me.Controls("lblPreviewInfo").Caption = "СХЕМА (не итоговые векторы): " & CStr(floors + plinth) & " этажей, " & _
         CStr(sections) & " секций; подъезды (слева направо): " & doorList & "." & vbCrLf & _
         "Фактура A×B: " & Me.Controls("txtTexA").Text & " × " & Me.Controls("txtTexB").Text & _
         " мм; детали условны."
@@ -360,12 +367,81 @@ Public Sub RefreshPreview()
         Me.Controls("lblPreviewInfo").Caption = Me.Controls("lblPreviewInfo").Caption & " Показано не более 20 этажей."
     End If
 done:
+    RefreshTextureSwatch
     mPreviewBusy = False
     Exit Sub
 failed:
     On Error Resume Next
     Me.Controls("lblPreviewInfo").Caption = "Предпросмотр недоступен: " & Err.Description
     mPreviewBusy = False
+End Sub
+
+ ' Отдельный увеличенный образец показывает размеры на видимом поле 20×20 мм.
+Private Sub RefreshTextureSwatch()
+    Dim box As Object, i As Long, n As Long, kind As Long
+    Dim a As Double, b As Double, gap As Double, sx As Double, sy As Double
+    Dim xx As Double, yy As Double, shift As Double, px As Double, py As Double
+    Dim row As Long, col As Long, capped As Boolean
+    Set box = Me.Controls("fraTexture")
+    For i = box.Controls.Count - 1 To 0 Step -1
+        box.Controls.Remove box.Controls(i).Name
+    Next i
+    kind = Me.Controls("cmbTexture").ListIndex
+    a = PreviewNumber("txtTexA", 4, 0.1, 20)
+    b = PreviewNumber("txtTexB", 1.7, 0.1, 20)
+    gap = PreviewNumber("txtTexGap", 0.5, 0.1, 20)
+    px = 5: py = 18
+    PreviewRect box, n, px, py, 80, 80, RGB(247, 244, 238), True
+    sx = a * 4: sy = b * 4
+    If kind = 1 Then sx = b * 4: sy = a * 4
+    If kind = 6 Then sx = 10: sy = a * 4
+    If sx < 4 Then sx = 4: capped = True
+    If sy < 4 Then sy = 4: capped = True
+    If kind = 3 Or kind = 7 Or kind = 2 Then
+        yy = 0: row = 0
+        Do While yy < 80
+            xx = 0: col = 0
+            Do While xx < 80
+                shift = 0
+                If kind <> 2 And row Mod 2 = 1 Then shift = sx / 2
+                If xx + shift < 80 Then
+                    PreviewRect box, n, px + xx + shift, py + yy, _
+                        MinD(sx, 80 - xx - shift) - MinD(gap * 2, sx / 3), _
+                        MinD(sy, 80 - yy) - MinD(gap * 2, sy / 3), RGB(167, 150, 130), True
+                End If
+                xx = xx + sx: col = col + 1
+            Loop
+            yy = yy + sy: row = row + 1
+        Loop
+    ElseIf kind = 4 Then
+        xx = sx
+        Do While xx < 80
+            PreviewRect box, n, px + xx, py, 1, 80, RGB(140, 90, 43), False
+            xx = xx + sx
+        Loop
+        yy = sy
+        Do While yy < 80
+            PreviewRect box, n, px, py + yy, 80, 1, RGB(140, 90, 43), False
+            yy = yy + sy
+        Loop
+    Else
+        yy = sy: row = 1
+        Do While yy < 80
+            PreviewRect box, n, px, py + yy, 80, 1, RGB(140, 90, 43), False
+            If kind <> 6 Then
+                shift = 0
+                If (kind = 0 Or kind = 1) And row Mod 2 = 1 Then shift = sx / 2
+                xx = shift
+                Do While xx < 80
+                    If xx > 0 Then PreviewRect box, n, px + xx, py + yy, 1, MinD(sy, 80 - yy), RGB(140, 90, 43), False
+                    xx = xx + sx
+                Loop
+            End If
+            yy = yy + sy: row = row + 1
+        Loop
+    End If
+    Me.Controls("lblTextureInfo").Caption = "A=" & CStr(a) & "; B=" & CStr(b) & "; шов=" & CStr(gap) & " мм"
+    If capped Then Me.Controls("lblTextureInfo").Caption = Me.Controls("lblTextureInfo").Caption & " (масштаб ограничен)"
 End Sub
 
 Private Sub PreviewWindow(ByVal box As Object, ByRef itemNo As Long, ByVal x As Double, _

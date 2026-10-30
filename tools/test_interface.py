@@ -100,11 +100,31 @@ class InterfaceChecks(unittest.TestCase):
         self.assertIn('bar.Orientation = 1', runtime)
         self.assertIn('gapSteps + 1', form)
         self.assertIn('Set facadeGroup = gFacadeShapes.Group', engine)
-        self.assertEqual(utils.count('gFacadeShapes.Add sh'), 2)
+        self.assertEqual(utils.count('gColorShapes(layerIdx).Add sh'), 2)
+        self.assertIn('Set colorGroup = gColorShapes(colorIndex).Group', engine)
+        self.assertIn('gFacadeShapes.Add colorGroup', engine)
+        self.assertLess(engine.index('Set colorGroup = gColorShapes(colorIndex).Group'),
+                        engine.index('Set facadeGroup = gFacadeShapes.Group'))
         self.assertIn('If FourSides Then', engine)
         self.assertIn('For side = 0 To sides - 1', engine)
         self.assertIn('If oldSeed > 0 Then Seed = oldSeed', engine)
         self.assertIn('UBound(values) < UBound(fields) - 1', form)
+
+    def test_continuous_texture_and_swatch(self):
+        engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
+        utils = (SRC / "modUtils.bas").read_text(encoding="utf-8")
+        form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
+        texture = engine[engine.index("Private Sub DrawTextures()"):engine.index("Private Sub DrawStoneTexture")]
+        self.assertIn('DrawWallTexture', texture)
+        self.assertNotIn('DrawTextureSection', texture)
+        self.assertIn('x0 = mX0: x1 = mX1: ya = mFY(0): ybnd = mRoofBot', texture)
+        self.assertIn('row = CLng(Int(y / rowH + 0.000001))', texture)
+        self.assertIn('TextureHorizontalAllowed', texture)
+        self.assertIn('TextureVerticalAllowed', texture)
+        self.assertIn('Public Sub DrawTextureEdge', utils)
+        self.assertIn('SegmentBox(x1, y1, dx, dy', utils)
+        self.assertIn('RefreshTextureSwatch', form)
+        self.assertIn('СХЕМА (не итоговые векторы)', form)
 
     def test_obstacle_checks_used_for_details(self):
         engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")

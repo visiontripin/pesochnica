@@ -30,6 +30,7 @@ Public Const LC_KRYSHA As Long = 8
 Public gDoc As Document
 Public gLayers(1 To 8) As Layer
 Public gFacadeShapes As ShapeRange
+Public gColorShapes(1 To 8) As ShapeRange
 
 ' препятствия для текстур (прямоугольники)
 Private mObsX1() As Double, mObsY1() As Double
@@ -179,7 +180,7 @@ End Function
 Public Sub DrawHClip(y As Double, xa As Double, xb As Double, layerIdx As Long, _
                      margin As Double, amp As Double, jitterOn As Boolean)
     If mObsCount = 0 Then
-        If xb - xa >= 0.7 Then DrawWobbleLine xa, y, xb, y, layerIdx, amp, jitterOn
+        If xb - xa >= 0.2 Then DrawWobbleLine xa, y, xb, y, layerIdx, amp, jitterOn
         Exit Sub
     End If
     Dim blocks() As Double: ReDim blocks(0 To mObsCount * 2 - 1, 0 To 1)
@@ -197,7 +198,7 @@ Public Sub DrawHClip(y As Double, xa As Double, xb As Double, layerIdx As Long, 
     If IsEmpty(parts) Then Exit Sub
     Dim k As Long
     For k = LBound(parts) To UBound(parts) Step 2
-        If parts(k + 1) - parts(k) >= 0.7 Then
+        If parts(k + 1) - parts(k) >= 0.2 Then
             DrawWobbleLine CDbl(parts(k)), y, CDbl(parts(k + 1)), y, layerIdx, amp, jitterOn
         End If
     Next k
@@ -207,7 +208,7 @@ End Sub
 Public Sub DrawVClip(x As Double, ya As Double, yb As Double, layerIdx As Long, _
                      margin As Double, amp As Double, jitterOn As Boolean)
     If mObsCount = 0 Then
-        If yb - ya >= 0.7 Then DrawWobbleLine x, ya, x, yb, layerIdx, amp, jitterOn
+        If yb - ya >= 0.2 Then DrawWobbleLine x, ya, x, yb, layerIdx, amp, jitterOn
         Exit Sub
     End If
     Dim blocks() As Double: ReDim blocks(0 To mObsCount * 2 - 1, 0 To 1)
@@ -225,8 +226,59 @@ Public Sub DrawVClip(x As Double, ya As Double, yb As Double, layerIdx As Long, 
     If IsEmpty(parts) Then Exit Sub
     Dim k As Long
     For k = LBound(parts) To UBound(parts) Step 2
-        If parts(k + 1) - parts(k) >= 0.7 Then
+        If parts(k + 1) - parts(k) >= 0.2 Then
             DrawWobbleLine x, CDbl(parts(k)), x, CDbl(parts(k + 1)), layerIdx, amp, jitterOn
+        End If
+    Next k
+End Sub
+
+ ' Обрезка произвольного ребра по границам стены и прямоугольным препятствиям.
+Private Function SegmentBox(ByVal x As Double, ByVal y As Double, ByVal dx As Double, ByVal dy As Double, _
+                            ByVal leftX As Double, ByVal bottomY As Double, ByVal rightX As Double, ByVal topY As Double, _
+                            ByRef t0 As Double, ByRef t1 As Double) As Boolean
+    Dim a As Double, b As Double, tmp As Double
+    t0 = 0: t1 = 1
+    If Abs(dx) < 0.0000001 Then
+        If x < leftX Or x > rightX Then Exit Function
+    Else
+        a = (leftX - x) / dx: b = (rightX - x) / dx
+        If a > b Then tmp = a: a = b: b = tmp
+        If a > t0 Then t0 = a
+        If b < t1 Then t1 = b
+    End If
+    If Abs(dy) < 0.0000001 Then
+        If y < bottomY Or y > topY Then Exit Function
+    Else
+        a = (bottomY - y) / dy: b = (topY - y) / dy
+        If a > b Then tmp = a: a = b: b = tmp
+        If a > t0 Then t0 = a
+        If b < t1 Then t1 = b
+    End If
+    SegmentBox = (t1 > t0)
+End Function
+
+Public Sub DrawTextureEdge(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double, _
+                           ByVal wallLeft As Double, ByVal wallBottom As Double, ByVal wallRight As Double, _
+                           ByVal wallTop As Double, ByVal margin As Double)
+    Dim dx As Double, dy As Double, lo As Double, hi As Double, a As Double, b As Double
+    Dim i As Long, n As Long, blocks() As Double, parts As Variant, k As Long, length As Double
+    dx = x2 - x1: dy = y2 - y1
+    length = Sqr(dx * dx + dy * dy)
+    If length < 0.2 Then Exit Sub
+    If Not SegmentBox(x1, y1, dx, dy, wallLeft, wallBottom, wallRight, wallTop, lo, hi) Then Exit Sub
+    ReDim blocks(0 To MaxD(1, CDbl(mObsCount)) - 1, 0 To 1)
+    For i = 0 To mObsCount - 1
+        If SegmentBox(x1, y1, dx, dy, mObsX1(i) - margin, mObsY1(i) - margin, _
+                      mObsX2(i) + margin, mObsY2(i) + margin, a, b) Then
+            blocks(n, 0) = a: blocks(n, 1) = b: n = n + 1
+        End If
+    Next i
+    parts = SubtractIntervals(lo, hi, blocks, n)
+    If IsEmpty(parts) Then Exit Sub
+    For k = LBound(parts) To UBound(parts) Step 2
+        a = CDbl(parts(k)): b = CDbl(parts(k + 1))
+        If (b - a) * length >= 0.2 Then
+            DrawWobbleLine x1 + dx * a, y1 + dy * a, x1 + dx * b, y1 + dy * b, LC_KLADKA, 0, False
         End If
     Next k
 End Sub
@@ -290,7 +342,7 @@ Public Sub DrawWobbleLine(x1 As Double, y1 As Double, x2 As Double, y2 As Double
     Dim sh As Shape
     Set sh = gLayers(layerIdx).CreateCurve(crv)
     ApplyStyle sh, layerIdx
-    gFacadeShapes.Add sh
+    gColorShapes(layerIdx).Add sh
 End Sub
 
 Public Sub DrawRectWobble(x As Double, y As Double, w As Double, h As Double, _
@@ -313,7 +365,7 @@ Public Sub DrawPoly(pts() As Double, layerIdx As Long, closed As Boolean)
     Dim sh As Shape
     Set sh = gLayers(layerIdx).CreateCurve(crv)
     ApplyStyle sh, layerIdx
-    gFacadeShapes.Add sh
+    gColorShapes(layerIdx).Add sh
 End Sub
 
 Public Sub DrawCircleWobble(cx As Double, cy As Double, r As Double, _

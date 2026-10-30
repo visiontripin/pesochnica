@@ -40,7 +40,7 @@ Public Sub BuildFacade()
     Dim stage As String
     Dim side As Long, sides As Long, columns As Long, rows As Long
     Dim dx As Double, dy As Double, spacing As Double, oldSeed As Long
-    Dim facadeGroup As Shape
+    Dim facadeGroup As Shape, colorGroup As Shape, colorIndex As Long
     Set doc = Application.ActiveDocument
     On Error GoTo fail
     oldUnit = doc.Unit
@@ -77,6 +77,9 @@ Public Sub BuildFacade()
     PrepareLayers doc
     For side = 0 To sides - 1
     Set gFacadeShapes = New ShapeRange
+    For colorIndex = 1 To LAYER_COUNT
+        Set gColorShapes(colorIndex) = New ShapeRange
+    Next colorIndex
     ResetObstacles
     Seed = CLng(((CDbl(oldSeed) - 1 + side) - Int((CDbl(oldSeed) - 1 + side) / 2147483647#) * 2147483647#) + 1)
     SeedRNG Seed
@@ -106,6 +109,16 @@ Public Sub BuildFacade()
     If CracksOn Then DrawCracks
     DrawRoof
     stage = "группировка стороны " & CStr(side + 1)
+    For colorIndex = 1 To LAYER_COUNT
+        If gColorShapes(colorIndex).Count > 1 Then
+            Set colorGroup = gColorShapes(colorIndex).Group
+            colorGroup.Name = LayerNames(colorIndex)
+            gFacadeShapes.Add colorGroup
+        ElseIf gColorShapes(colorIndex).Count = 1 Then
+            gFacadeShapes.Add gColorShapes(colorIndex).Item(1)
+        End If
+        Set gColorShapes(colorIndex) = Nothing
+    Next colorIndex
     If gFacadeShapes.Count > 1 Then
         Set facadeGroup = gFacadeShapes.Group
         facadeGroup.Name = "Фасад " & CStr(side + 1)
@@ -130,6 +143,9 @@ cleanup:
     On Error Resume Next
     If oldSeed > 0 Then Seed = oldSeed
     Set gFacadeShapes = Nothing
+    For colorIndex = 1 To LAYER_COUNT
+        Set gColorShapes(colorIndex) = Nothing
+    Next colorIndex
     If progressStarted Then Application.Status.EndProgress
     If haveSettings Then
         doc.Unit = oldUnit
@@ -658,20 +674,33 @@ End Sub
 ' фактуры отделки: 0 кирпич, 1 доски, 2 облицовочные панели
 ' ------------------------------------------------------------
 Private Sub DrawTextures()
-    Dim f As Long, si As Long
-    For f = 0 To mNF - 1
-        FacadeProgress "фактура, этаж " & CStr(f + 1) & " из " & CStr(mNF), 25 + CLng(60# * f / mNF)
-        For si = 1 To mNSec
-            If mSecType(si) <> 4 And Not IsEntrance(si, f) Then DrawTextureSection si, f
-        Next si
-    Next f
+    ' Единая координатная сетка на всей стене, без разрывов по этажам и секциям.
+    FacadeProgress "фактура стены", 25
+    DrawWallTexture
 End Sub
 
-Private Sub DrawTextureSection(si As Long, f As Long)
-    Dim x0 As Double, x1 As Double, yb As Double
-    x0 = mSecX1(si) + 0.5: x1 = mSecX2(si) - 0.5: yb = mFY(f)
-    Dim ya As Double, ybnd As Double
-    ya = yb + 0.45: ybnd = yb + mFloorH - 0.45
+Private Function TextureHorizontalAllowed(ByVal y As Double) As Boolean
+    Dim i As Long
+    For i = 0 To mNF - 1
+        If Abs(y - mFY(i)) < GapMin + 0.2 Then Exit Function
+    Next i
+    If Abs(y - mRoofBot) < GapMin + 0.2 Then Exit Function
+    TextureHorizontalAllowed = True
+End Function
+
+Private Function TextureVerticalAllowed(ByVal x As Double) As Boolean
+    Dim i As Long, jointX As Double
+    If Abs(x - mX0) < GapMin + 0.2 Or Abs(x - mX1) < GapMin + 0.2 Then Exit Function
+    For i = 1 To mNSec - 1
+        jointX = (mSecX2(i) + mSecX1(i + 1)) / 2
+        If Abs(x - jointX) < GapMin + 0.2 Then Exit Function
+    Next i
+    TextureVerticalAllowed = True
+End Function
+
+Private Sub DrawWallTexture()
+    Dim x0 As Double, x1 As Double, ya As Double, ybnd As Double
+    x0 = mX0: x1 = mX1: ya = mFY(0): ybnd = mRoofBot
     Dim amp As Double: amp = 0.045
     Dim margin As Double: margin = GapMin + 0.3
 
@@ -679,16 +708,23 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         ' Кирпич со сдвигом рядов либо ровные швы
         Dim rowH As Double: rowH = TexB
         Dim brickL As Double: brickL = TexA
-        Dim row As Long: row = 0
-        Dim y As Double: y = CeilD(ya / rowH) * rowH
+        Dim row As Long
+        Dim y As Double: y = Int(ya / rowH) * rowH
+        row = CLng(Int(y / rowH + 0.000001))
         Do While y <= ybnd
-            DrawHClip y, x0, x1, LC_KLADKA, margin, amp, JitterOn
             Dim stagger As Double
             If TextureType = 0 And row Mod 2 = 1 Then stagger = brickL / 2 Else stagger = 0
             Dim x As Double
+            If y >= ya And TextureHorizontalAllowed(y) Then
+                x = Int((x0 - stagger) / brickL) * brickL + stagger
+                Do While x < x1
+                    DrawHClip y, MaxD(x, x0), MinD(x + brickL, x1), LC_KLADKA, margin, amp, JitterOn
+                    x = x + brickL
+                Loop
+            End If
             x = CeilD((x0 - stagger) / brickL) * brickL + stagger
             Do While x <= x1
-                DrawVClip x, y + 0.1, MinD(y + rowH - 0.1, ybnd), LC_KLADKA, margin, amp * 0.9, JitterOn
+                If TextureVerticalAllowed(x) Then DrawVClip x, MaxD(y, ya), MinD(y + rowH, ybnd), LC_KLADKA, margin, amp * 0.9, JitterOn
                 x = x + brickL
             Loop
             y = y + rowH: row = row + 1
@@ -697,14 +733,20 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         ' горизонтальные доски: длинные линии + разбежка стыков
         Dim boardW As Double: boardW = TexA
         Dim boardL As Double: boardL = TexB
-        y = CeilD(ya / boardW) * boardW
-        row = 0
+        y = Int(ya / boardW) * boardW
+        row = CLng(Int(y / boardW + 0.000001))
         Do While y <= ybnd
-            DrawHClip y, x0, x1, LC_KLADKA, margin, amp, JitterOn
             stagger = IIf(row Mod 2 = 1, boardL / 2, 0)
+            If y >= ya And TextureHorizontalAllowed(y) Then
+                x = Int((x0 - stagger) / boardL) * boardL + stagger
+                Do While x < x1
+                    DrawHClip y, MaxD(x, x0), MinD(x + boardL, x1), LC_KLADKA, margin, amp, JitterOn
+                    x = x + boardL
+                Loop
+            End If
             x = CeilD((x0 - stagger) / boardL) * boardL + stagger
             Do While x <= x1
-                DrawVClip x, y + 0.1, MinD(y + boardW - 0.1, ybnd), LC_KLADKA, margin, amp * 0.9, JitterOn
+                If TextureVerticalAllowed(x) Then DrawVClip x, MaxD(y, ya), MinD(y + boardW, ybnd), LC_KLADKA, margin, amp * 0.9, JitterOn
                 x = x + boardL
             Loop
             y = y + boardW: row = row + 1
@@ -712,13 +754,14 @@ Private Sub DrawTextureSection(si As Long, f As Long)
     ElseIf TextureType = 4 Then
         ' Вертикальные доски со смещёнными поперечными стыками.
         Dim col As Long
-        x = CeilD(x0 / TexA) * TexA
+        x = Int(x0 / TexA) * TexA
+        col = CLng(Int(x / TexA + 0.000001))
         Do While x <= x1
-            DrawVClip x, ya, ybnd, LC_KLADKA, margin, amp, JitterOn
+            If x >= x0 And TextureVerticalAllowed(x) Then DrawVClip x, ya, ybnd, LC_KLADKA, margin, amp, JitterOn
             If col Mod 2 = 0 Then stagger = 0 Else stagger = TexB / 2
             y = CeilD((ya - stagger) / TexB) * TexB + stagger
             Do While y <= ybnd
-                DrawHClip y, x + 0.1, MinD(x + TexA - 0.1, x1), LC_KLADKA, margin, amp, JitterOn
+                If TextureHorizontalAllowed(y) Then DrawHClip y, MaxD(x, x0), MinD(x + TexA, x1), LC_KLADKA, margin, amp, JitterOn
                 y = y + TexB
             Loop
             x = x + TexA: col = col + 1
@@ -729,7 +772,7 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         waveAmp = MinD(0.12, MaxD(0, (TexA - GapMin) / 2 - 0.03))
         y = CeilD(ya / TexA) * TexA
         Do While y <= ybnd
-            DrawHClip y, x0, x1, LC_KLADKA, margin, waveAmp, True
+            If TextureHorizontalAllowed(y) Then DrawHClip y, x0, x1, LC_KLADKA, margin, waveAmp, True
             y = y + TexA
         Loop
     ElseIf TextureType = 3 Or TextureType = 7 Then
@@ -738,17 +781,12 @@ Private Sub DrawTextureSection(si As Long, f As Long)
         ' облицовочные панели: сетка прямоугольников с зазором TexGap
         Dim pw As Double, ph As Double
         pw = TexA: ph = TexB
-        Dim gy0 As Double: gy0 = CeilD(ya / ph) * ph
-        y = gy0
-        Do While y + ph <= ybnd + 0.01
-            x = CeilD(x0 / pw) * pw
-            Do While x + pw <= x1 + 0.01
-                If RectFree(x + TexGap / 2, y + TexGap / 2, _
-                            x + pw - TexGap / 2, y + ph - TexGap / 2, margin) Then
-                    DrawRectWobble x + TexGap / 2, y + TexGap / 2, _
-                                   pw - TexGap, ph - TexGap, LC_KLADKA, 0.04, JitterOn
-                    mShapeCount = mShapeCount + 1
-                End If
+        y = Int(ya / ph) * ph
+        Do While y < ybnd
+            x = Int(x0 / pw) * pw
+            Do While x < x1
+                DrawPanelEdges x + TexGap / 2, y + TexGap / 2, x + pw - TexGap / 2, _
+                               y + ph - TexGap / 2, x0, ya, x1, ybnd, margin
                 x = x + pw
             Loop
             y = y + ph
@@ -758,28 +796,27 @@ End Sub
 
 Private Sub DrawStoneTexture(ByVal x0 As Double, ByVal x1 As Double, _
                              ByVal ya As Double, ByVal yb As Double, ByVal margin As Double)
-    ' Условные неровные каменные блоки; целиком пропускаем камень у проёма.
+    ' Каменные контуры обрезаются по стене и проёмам, а не пропускаются целиком.
     Dim gap As Double, y As Double, x As Double, row As Long, offset As Double
     gap = MaxD(TexGap, GapMin + 0.2)
     If gap >= TexA Or gap >= TexB Then Exit Sub
-    y = CeilD(ya / TexB) * TexB
-    Do While y + TexB <= yb
+    y = Int(ya / TexB) * TexB
+    row = CLng(Int(y / TexB + 0.000001))
+    Do While y < yb
         If row Mod 2 = 0 Then offset = 0 Else offset = TexA / 2
-        x = CeilD((x0 - offset) / TexA) * TexA + offset
-        Do While x + TexA <= x1
-            Dim sx1 As Double, sy1 As Double, sx2 As Double, sy2 As Double
-            sx1 = x + gap / 2: sy1 = y + gap / 2
-            sx2 = x + TexA - gap / 2: sy2 = y + TexB - gap / 2
-            If RectFree(sx1, sy1, sx2, sy2, margin) Then
-                DrawStone sx1, sy1, sx2, sy2
-            End If
+        x = Int((x0 - offset) / TexA) * TexA + offset
+        Do While x < x1
+            DrawStone x + gap / 2, y + gap / 2, x + TexA - gap / 2, y + TexB - gap / 2, _
+                      x0, ya, x1, yb, margin
             x = x + TexA
         Loop
         y = y + TexB: row = row + 1
     Loop
 End Sub
 
-Private Sub DrawStone(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double)
+Private Sub DrawStone(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double, _
+                      ByVal wallLeft As Double, ByVal wallBottom As Double, ByVal wallRight As Double, _
+                      ByVal wallTop As Double, ByVal margin As Double)
     Dim pts(0 To 7, 0 To 1) As Double, rx As Double, ry As Double
     If TextureType = 7 Then
         rx = (x2 - x1) * RndRange(0.33, 0.45)
@@ -796,7 +833,42 @@ Private Sub DrawStone(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double
     pts(5, 0) = x1 + rx: pts(5, 1) = y2
     pts(6, 0) = x1: pts(6, 1) = y2 - ry
     pts(7, 0) = x1: pts(7, 1) = y1 + ry
-    DrawPoly pts, LC_KLADKA, True
+    If x1 >= wallLeft And x2 <= wallRight And y1 >= wallBottom And y2 <= wallTop Then
+        If TextureHorizontalAllowed(y1) And TextureHorizontalAllowed(y2) And _
+           TextureVerticalAllowed(x1) And TextureVerticalAllowed(x2) Then
+            If RectFree(x1, y1, x2, y2, margin) Then
+                DrawPoly pts, LC_KLADKA, True
+                Exit Sub
+            End If
+        End If
+    End If
+    Dim i As Long, nextPoint As Long
+    For i = 0 To 7
+        nextPoint = (i + 1) Mod 8
+        If (Abs(pts(i, 1) - pts(nextPoint, 1)) > 0.00001 Or TextureHorizontalAllowed(pts(i, 1))) And _
+           (Abs(pts(i, 0) - pts(nextPoint, 0)) > 0.00001 Or TextureVerticalAllowed(pts(i, 0))) Then
+            DrawTextureEdge pts(i, 0), pts(i, 1), pts(nextPoint, 0), pts(nextPoint, 1), _
+                            wallLeft, wallBottom, wallRight, wallTop, margin
+        End If
+    Next i
+End Sub
+
+Private Sub DrawPanelEdges(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double, _
+                           ByVal wallLeft As Double, ByVal wallBottom As Double, ByVal wallRight As Double, _
+                           ByVal wallTop As Double, ByVal margin As Double)
+    If x1 >= wallLeft And x2 <= wallRight And y1 >= wallBottom And y2 <= wallTop Then
+        If TextureHorizontalAllowed(y1) And TextureHorizontalAllowed(y2) And _
+           TextureVerticalAllowed(x1) And TextureVerticalAllowed(x2) Then
+            If RectFree(x1, y1, x2, y2, margin) Then
+                DrawRectWobble x1, y1, x2 - x1, y2 - y1, LC_KLADKA, 0.04, JitterOn
+                Exit Sub
+            End If
+        End If
+    End If
+    If TextureHorizontalAllowed(y1) Then DrawTextureEdge x1, y1, x2, y1, wallLeft, wallBottom, wallRight, wallTop, margin
+    If TextureHorizontalAllowed(y2) Then DrawTextureEdge x1, y2, x2, y2, wallLeft, wallBottom, wallRight, wallTop, margin
+    If TextureVerticalAllowed(x1) Then DrawTextureEdge x1, y1, x1, y2, wallLeft, wallBottom, wallRight, wallTop, margin
+    If TextureVerticalAllowed(x2) Then DrawTextureEdge x2, y1, x2, y2, wallLeft, wallBottom, wallRight, wallTop, margin
 End Sub
 
 ' ------------------------------------------------------------
