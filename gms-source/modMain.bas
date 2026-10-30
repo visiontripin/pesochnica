@@ -37,6 +37,7 @@ Public ACOn As Boolean, PipesOn As Boolean, CracksOn As Boolean, BalconiesOn As 
 Public SectionTypes As String, EntranceSections As String
 Public Seed As Long
 
+Public FourSides As Boolean
 Public FormCancelled As Boolean
 
 ' главная точка входа (видна в диспетчере макросов CorelDRAW)
@@ -77,9 +78,11 @@ Public Sub ApplyDefaultPreset()
     Seed = 101
     ACOn = True: PipesOn = True: CracksOn = True: BalconiesOn = True
     SectionTypes = "": EntranceSections = ""
+    FourSides = False
 End Sub
 
 Public Function ValidateSettings() As Boolean
+    Dim roofSpace As Double, foundationSpace As Double, sectionWidth As Double, floorHeight As Double
     ValidateSettings = False
     If PanelW < 40 Or PanelH < 60 Then
         MsgBox "Слишком маленькая панель. Минимум 40x60 мм.", vbExclamation
@@ -92,23 +95,35 @@ Public Function ValidateSettings() As Boolean
         Exit Function
     End If
     If NSections < 1 Then NSections = 1
-    If NSections > 12 Then NSections = 12
+    If NSections > 20 Then NSections = 20
     If NEntrances < 0 Then NEntrances = 0
     If NEntrances > NSections Then NEntrances = NSections
     If Not ValidateSectionLists() Then Exit Function
     If MarginMm < 1 Then MarginMm = 1
     If GapMin < 0.1 Then GapMin = 0.1
+    Select Case RoofType
+        Case 0: roofSpace = PanelH * 0.115
+        Case 1: roofSpace = PanelH * 0.1
+        Case 2: roofSpace = PanelH * 0.08
+    End Select
+    If FoundationOn Then foundationSpace = FoundationH
+    sectionWidth = (PanelW - 2 * MarginMm - (NSections - 1) * 2#) / NSections
+    floorHeight = (PanelH - 2 * MarginMm - roofSpace - foundationSpace) / (NFloors + 0.9 * NPlinth)
+    If sectionWidth < 4 Or floorHeight < 4 Then
+        MsgBox "Недостаточно места для выбранного числа этажей или секций. Увеличьте панель либо уменьшите их количество и поля.", vbExclamation
+        Exit Function
+    End If
     If TexA < GapMin + 0.2 Then TexA = GapMin + 0.2
     If TexB < GapMin + 0.2 Then TexB = GapMin + 0.2
     If TextureType < 0 Or TextureType > 7 Then
         MsgBox "Выберите допустимую фактуру отделки.", vbExclamation
         Exit Function
     End If
+    ' Для панелей/камня корректируем шов и размеры, а не останавливаем построение.
     If TextureType = 2 Or TextureType = 3 Or TextureType = 7 Then
-        If TexGap < GapMin + 0.2 Or TexGap >= TexA Or TexGap >= TexB Then
-            MsgBox "Для панелей и камня зазор должен быть не менее GapMin + 0,2 мм и меньше размеров A и B.", vbExclamation
-            Exit Function
-        End If
+        TexGap = MaxD(TexGap, GapMin + 0.2)
+        TexA = MaxD(TexA, TexGap + 0.1)
+        TexB = MaxD(TexB, TexGap + 0.1)
     End If
     If Seed <= 0 Then Seed = 101
     ValidateSettings = True
@@ -141,7 +156,7 @@ End Function
 
 Private Function ValidateSectionLists() As Boolean
     Dim values As Variant, v As Variant, n As Double, i As Long
-    Dim seen(1 To 12) As Boolean
+    Dim seen(1 To 20) As Boolean
     ValidateSectionLists = False
     If Len(Trim$(SectionTypes)) > 0 Then
         values = Split(SectionTypes, ";")

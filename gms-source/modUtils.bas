@@ -29,6 +29,7 @@ Public Const LC_KRYSHA As Long = 8
 ' рабочий документ и слой
 Public gDoc As Document
 Public gLayers(1 To 8) As Layer
+Public gFacadeShapes As ShapeRange
 
 ' препятствия для текстур (прямоугольники)
 Private mObsX1() As Double, mObsY1() As Double
@@ -289,6 +290,7 @@ Public Sub DrawWobbleLine(x1 As Double, y1 As Double, x2 As Double, y2 As Double
     Dim sh As Shape
     Set sh = gLayers(layerIdx).CreateCurve(crv)
     ApplyStyle sh, layerIdx
+    gFacadeShapes.Add sh
 End Sub
 
 Public Sub DrawRectWobble(x As Double, y As Double, w As Double, h As Double, _
@@ -311,6 +313,7 @@ Public Sub DrawPoly(pts() As Double, layerIdx As Long, closed As Boolean)
     Dim sh As Shape
     Set sh = gLayers(layerIdx).CreateCurve(crv)
     ApplyStyle sh, layerIdx
+    gFacadeShapes.Add sh
 End Sub
 
 Public Sub DrawCircleWobble(cx As Double, cy As Double, r As Double, _

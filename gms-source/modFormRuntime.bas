@@ -59,7 +59,7 @@ Public Sub BuildControls(d As Object)
     AddCombo d, "cmbSectionNo", 70, y, 65
     AddLabel d, "lblTypeChoice", "Тип:", 145, y + 3, 30
     AddCombo d, "cmbSectionType", 180, y, 192: y = y + 26
-    AddLabel d, "lblEntList", "Подъезд:", 10, y + 3, 100
+    AddLabel d, "lblEntList", "Подъезд секции:", 10, y + 3, 100
     AddCombo d, "cmbEntrance", 115, y, 257: y = y + 26
     AddText d, "txtSecTypes", 0, 0, 1, SectionTypes
     AddText d, "txtEntList", 0, 0, 1, EntranceSections
@@ -78,12 +78,12 @@ Public Sub BuildControls(d As Object)
     AddCheck d, "chkRandom", "Смешивать стили", 320, y + 2, 130: y = y + 26
     AddLabel d, "lblTexture", "Фактура отделки:", 10, y + 3, 120
     AddCombo d, "cmbTexture", 135, y, 237: y = y + 26
-    AddLabel d, "lblTA", "Размер A:", 10, y + 3, 60
-    AddText d, "txtTexA", 75, y, 70, NumStrPub(TexA)
-    AddLabel d, "lblTB", "Размер B:", 160, y + 3, 60
-    AddText d, "txtTexB", 225, y, 70, NumStrPub(TexB)
-    AddLabel d, "lblTG", "Зазор:", 305, y + 3, 45
-    AddText d, "txtTexGap", 352, y, 45, NumStrPub(TexGap): y = y + 30
+    AddLabel d, "lblTA", "A:", 10, y + 3, 25
+    AddText d, "txtTexA", 35, y, 95, NumStrPub(TexA)
+    AddLabel d, "lblTB", "B:", 145, y + 3, 25
+    AddText d, "txtTexB", 170, y, 95, NumStrPub(TexB)
+    AddLabel d, "lblTG", "Шов:", 280, y + 3, 33
+    AddText d, "txtTexGap", 315, y, 95, NumStrPub(TexGap): y = y + 30
 
     Header d, "Детализация и стиль линий", 10, y: y = y + 20
     AddCheck d, "chkJitter", "Живые (неидеальные) линии", 10, y + 2, 180
@@ -104,9 +104,21 @@ Public Sub BuildControls(d As Object)
     SetTip d, "txtH", "Высота панели в мм; стандарт — 320."
     SetTip d, "txtMargin", "Отступ фасада от края панели в миллиметрах."
     SetTip d, "txtGap", "Минимальный технологический зазор для луча; проверьте пробой на материале."
+    InstallSlider d, "txtFloors", 1, 20
+    InstallSlider d, "txtPlinth", 0, 20
+    InstallSlider d, "txtSections", 1, 20
+    InstallSlider d, "txtEntrances", 0, 20
+    InstallSlider d, "txtFoundH", 1, 20
+    InstallSlider d, "txtTexA", 1, 200
+    InstallSlider d, "txtTexB", 1, 200
+    InstallSlider d, "txtTexGap", 1, 200
+    AddCheck d, "chkFourSides", "Четыре стороны на странице", 10, y, 210
+    d.Controls("chkFourSides").Value = FourSides
+    SetTip d, "chkFourSides", "Четыре варианта с соседними Seed, разложенные с зазором 5 мм."
+    y = y + 22
     SetTip d, "txtFloors", "Число жилых этажей, не включая цоколь."
     SetTip d, "txtPlinth", "Число цокольных этажей под жилыми; подъезды располагаются на самом нижнем этаже."
-    SetTip d, "txtSections", "Число вертикальных секций фасада (1–12)."
+    SetTip d, "txtSections", "Число вертикальных секций фасада (1–20)."
     SetTip d, "txtEntrances", "Количество подъездов: справа налево, не более числа секций."
     SetTip d, "chkFoundation", "Включить фундамент под этажами."
     SetTip d, "txtFoundH", "Высота фундамента в миллиметрах."
@@ -120,13 +132,17 @@ Public Sub BuildControls(d As Object)
     SetTip d, "chkJitter", "Небольшая неровность векторных линий."
     SetTip d, "cmbSectionNo", "Выберите номер секции слева направо."
     SetTip d, "cmbSectionType", "Выберите тип для выбранной секции."
-    SetTip d, "cmbEntrance", "Установите наличие подъезда на нижнем этаже выбранной секции."
+    SetTip d, "cmbEntrance", "Выберите секцию по номеру и укажите: есть ли в ней подъезд на нижнем этаже. Изменение количества восстанавливает автоматическое размещение справа."
     SetTip d, "chkAC", "Блоки только под окнами и при достаточном свободном месте."
     SetTip d, "chkPipes", "Включить водосточные трубы."
     SetTip d, "chkCracks", "Включить трещины."
     SetTip d, "chkBalconies", "Балконные секции; при отключении заменяются окнами."
     SetTip d, "chkCanopy", "Добавить козырёк подъезда."
     SetTip d, "cmbSeed", "Выберите число или введите своё: одинаковые числа дают одинаковый рисунок."
+    Dim sliderName As Variant
+    For Each sliderName In Array("Floors", "Plinth", "Sections", "Entrances", "FoundH", "TexA", "TexB", "TexGap")
+        d.Controls("scr" & CStr(sliderName)).ControlTipText = d.Controls("txt" & CStr(sliderName)).ControlTipText
+    Next sliderName
     Dim preview As Object
     Set preview = d.Controls.Add("Forms.Frame.1", "fraPreview")
     preview.Caption = "Предпросмотр (схематично)"
@@ -157,6 +173,21 @@ Public Sub BuildControls(d As Object)
         .Left = 320: .Top = y: .Width = 80: .Height = 24
         .Caption = "Отмена"
     End With
+End Sub
+
+Private Sub InstallSlider(ByVal d As Object, ByVal textName As String, ByVal minimum As Long, ByVal maximum As Long)
+    Dim txt As Object, bar As Object, label As Object, suffix As String
+    Set txt = d.Controls(textName)
+    suffix = Mid$(textName, 4)
+    Set bar = d.Controls.Add("Forms.ScrollBar.1", "scr" & suffix)
+    bar.Left = txt.Left: bar.Top = txt.Top: bar.Width = MaxD(20, txt.Width - 25): bar.Height = 16
+    bar.Min = minimum: bar.Max = maximum: bar.SmallChange = 1: bar.LargeChange = 1
+    bar.Orientation = 1
+    bar.ControlTipText = "Перемещайте ползунок; текущее значение показано справа."
+    Set label = d.Controls.Add("Forms.Label.1", "val" & suffix)
+    label.Left = bar.Left + bar.Width + 2: label.Top = bar.Top + 1
+    label.Width = 26: label.Height = 16
+    txt.Visible = False
 End Sub
 
 Private Sub Header(d As Object, caption As String, x As Long, y As Long)

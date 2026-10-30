@@ -14,6 +14,9 @@ class InterfaceChecks(unittest.TestCase):
         form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
         names = set(re.findall(r'Add(?:Label|Text|Combo|Check) d, "([^"]+)"', module))
         names.update(re.findall(r'Controls.Add\("Forms\.\w+\.1", "([^"]+)"\)', module))
+        slider_fields = re.findall(r'InstallSlider d, "txt([^"]+)"', module)
+        names.update("scr" + field for field in slider_fields)
+        names.update("val" + field for field in slider_fields)
         names.update(("btnOk", "btnCancel"))
         used = set(re.findall(r'Me.Controls\("([^"]+)"\)', form))
         self.assertFalse(used - names, f"Unknown form controls: {used - names}")
@@ -74,7 +77,7 @@ class InterfaceChecks(unittest.TestCase):
         for old in ("txtSecTypes", "txtEntList", "txtSeed"):
             self.assertIn('"' + old + '"', form)
         self.assertIn("mOwner.SectionChoiceChanged", cls)
-        self.assertIn("SetupSectionSelectors\n    RefreshPreview", form)
+        self.assertIn("SetupSectionSelectors\n    SyncSliders\n    RefreshPreview", form)
         self.assertIn("SectionTypeAt(i, oldList)", form)
         self.assertIn("EntranceAt(i, count, ec, oldList)", form)
         self.assertIn("TextureType < 0 Or TextureType > 7", main)
@@ -83,6 +86,25 @@ class InterfaceChecks(unittest.TestCase):
         self.assertIn('texture = Me.Controls("cmbTexture").ListIndex', form)
         self.assertIn('PreviewNumber("txtTexA"', form)
         self.assertIn('PreviewNumber("txtTexB"', form)
+
+    def test_sliders_grouping_and_layout(self):
+        form = (SRC / "frmFasad-code.txt").read_text(encoding="utf-8")
+        runtime = (SRC / "modFormRuntime.bas").read_text(encoding="utf-8")
+        engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")
+        utils = (SRC / "modUtils.bas").read_text(encoding="utf-8")
+        cls = (SRC / "clsFacadePreview.cls").read_text(encoding="utf-8")
+        for field in ("Floors", "Plinth", "Sections", "Entrances", "FoundH", "TexA", "TexB", "TexGap"):
+            self.assertIn('InstallSlider d, "txt' + field + '"', runtime)
+            self.assertIn('"scr' + field + '"', form)
+        self.assertIn("mOwner.SliderChanged mScroll.Name", cls)
+        self.assertIn('bar.Orientation = 1', runtime)
+        self.assertIn('gapSteps + 1', form)
+        self.assertIn('Set facadeGroup = gFacadeShapes.Group', engine)
+        self.assertEqual(utils.count('gFacadeShapes.Add sh'), 2)
+        self.assertIn('If FourSides Then', engine)
+        self.assertIn('For side = 0 To sides - 1', engine)
+        self.assertIn('If oldSeed > 0 Then Seed = oldSeed', engine)
+        self.assertIn('UBound(values) < UBound(fields) - 1', form)
 
     def test_obstacle_checks_used_for_details(self):
         engine = (SRC / "modEngine.bas").read_text(encoding="utf-8")

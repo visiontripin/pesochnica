@@ -29,7 +29,7 @@ Public Sub BuildFacade()
         MsgBox "Сначала откройте документ CorelDRAW и выберите нужную страницу.", vbExclamation
         Exit Sub
     End If
-    If MsgBox("Фасад будет добавлен на активную страницу от точки 0;0. " & _
+    If MsgBox("Один фасад строится от точки 0;0; четыре стороны — от левого нижнего угла страницы. " & _
               "Существующие объекты не удаляются и могут перекрываться." & vbCrLf & _
               "Продолжить?", vbYesNo + vbQuestion, "Генератор фасада") <> vbYes Then Exit Sub
 
@@ -38,6 +38,9 @@ Public Sub BuildFacade()
     Dim haveSettings As Boolean, groupStarted As Boolean, progressStarted As Boolean
     Dim errNumber As Long, errText As String
     Dim stage As String
+    Dim side As Long, sides As Long, columns As Long, rows As Long
+    Dim dx As Double, dy As Double, spacing As Double, oldSeed As Long
+    Dim facadeGroup As Shape
     Set doc = Application.ActiveDocument
     On Error GoTo fail
     oldUnit = doc.Unit
@@ -53,10 +56,29 @@ Public Sub BuildFacade()
     Err.Clear
     On Error GoTo fail
 
+    stage = "раскладка на странице"
+    spacing = 5
+    sides = 1: columns = 1: rows = 1
+    If FourSides Then
+        sides = 4
+        If doc.ActivePage.SizeWidth >= 4 * PanelW + 3 * spacing And doc.ActivePage.SizeHeight >= PanelH Then
+            columns = 4: rows = 1
+        ElseIf doc.ActivePage.SizeWidth >= 2 * PanelW + spacing And doc.ActivePage.SizeHeight >= 2 * PanelH + spacing Then
+            columns = 2: rows = 2
+        ElseIf doc.ActivePage.SizeWidth >= PanelW And doc.ActivePage.SizeHeight >= 4 * PanelH + 3 * spacing Then
+            columns = 1: rows = 4
+        Else
+            Err.Raise vbObjectError + 220, , "Четыре панели не помещаются на странице с промежутками 5 мм. Увеличьте страницу или отключите раскладку."
+        End If
+    End If
+    oldSeed = Seed
     stage = "подготовка слоёв"
     FacadeProgress stage, 2
     PrepareLayers doc
+    For side = 0 To sides - 1
+    Set gFacadeShapes = New ShapeRange
     ResetObstacles
+    Seed = CLng(((CDbl(oldSeed) - 1 + side) - Int((CDbl(oldSeed) - 1 + side) / 2147483647#) * 2147483647#) + 1)
     SeedRNG Seed
     mShapeCount = 0
     mJoint = 2#
@@ -83,6 +105,20 @@ Public Sub BuildFacade()
     If PipesOn Then DrawDownpipes
     If CracksOn Then DrawCracks
     DrawRoof
+    stage = "группировка стороны " & CStr(side + 1)
+    If gFacadeShapes.Count > 1 Then
+        Set facadeGroup = gFacadeShapes.Group
+        facadeGroup.Name = "Фасад " & CStr(side + 1)
+        dx = (side Mod columns) * (PanelW + spacing)
+        dy = (side \ columns) * (PanelH + spacing)
+        If FourSides Then
+            dx = dx + doc.ActivePage.LeftX
+            dy = dy + doc.ActivePage.BottomY
+        End If
+        If dx <> 0 Or dy <> 0 Then facadeGroup.Move dx, dy
+    End If
+    Set gFacadeShapes = Nothing
+    Next side
     FacadeProgress "завершение", 100
     GoTo cleanup
 
@@ -92,6 +128,8 @@ fail:
     Resume cleanup
 cleanup:
     On Error Resume Next
+    If oldSeed > 0 Then Seed = oldSeed
+    Set gFacadeShapes = Nothing
     If progressStarted Then Application.Status.EndProgress
     If haveSettings Then
         doc.Unit = oldUnit
@@ -420,7 +458,7 @@ End Sub
 
 Private Function WindowStyleFor(si As Long, f As Long) As Long
     If RandomStyles Then
-        WindowStyleFor = (f * 7 + si * 3 + Seed) Mod 4
+        WindowStyleFor = (f * 7 + si * 3 + (Seed Mod 4)) Mod 4
     Else
         WindowStyleFor = WindowType
         ' форма 4 (балканный блок) применима только к одинарным секциям

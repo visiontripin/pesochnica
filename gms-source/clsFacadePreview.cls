@@ -16,6 +16,7 @@ Private WithEvents mCombo As MSForms.ComboBox
 Attribute mCombo.VB_VarHelpID = -1
 Private WithEvents mCheck As MSForms.CheckBox
 Attribute mCheck.VB_VarHelpID = -1
+Private WithEvents mScroll As MSForms.ScrollBar
 Private WithEvents mButton As MSForms.CommandButton
 Attribute mButton.VB_VarHelpID = -1
 Private mOwner As Object
@@ -27,6 +28,7 @@ Public Sub Attach(ByVal owner As Object, ByVal control As Object)
         Case "ComboBox": Set mCombo = control
         Case "CheckBox": Set mCheck = control
         Case "CommandButton": Set mButton = control
+        Case "ScrollBar": Set mScroll = control
     End Select
 End Sub
 
@@ -35,6 +37,7 @@ Public Sub Detach()
     Set mCombo = Nothing
     Set mCheck = Nothing
     Set mButton = Nothing
+    Set mScroll = Nothing
     Set mOwner = Nothing
 End Sub
 
@@ -58,4 +61,8 @@ Private Sub mButton_Click()
 End Sub
 Private Sub mCheck_Click()
     mOwner.RefreshPreview
+End Sub
+
+Private Sub mScroll_Change()
+    mOwner.SliderChanged mScroll.Name
 End Sub
